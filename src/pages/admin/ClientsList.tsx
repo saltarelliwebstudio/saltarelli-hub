@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Phone, Zap, CreditCard, MoreVertical, Building2 } from 'lucide-react';
+import { Plus, Search, Phone, Zap, MoreVertical, Building2, Trash2 } from 'lucide-react';
 import { CreateClientModal } from '@/components/admin/CreateClientModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -19,66 +20,60 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
-
-// Mock data
-const mockClients = [
-  {
-    id: '1',
-    name: 'John Smith',
-    company: 'Acme Corporation',
-    status: 'active',
-    modules: ['voice', 'automations', 'billing'],
-    paymentStatus: 'active',
-    lastActivity: new Date(Date.now() - 1000 * 60 * 30),
-  },
-  {
-    id: '2',
-    name: 'Sarah Johnson',
-    company: 'Tech Solutions LLC',
-    status: 'active',
-    modules: ['voice', 'automations'],
-    paymentStatus: 'active',
-    lastActivity: new Date(Date.now() - 1000 * 60 * 60 * 2),
-  },
-  {
-    id: '3',
-    name: 'Mike Wilson',
-    company: 'StartUp Inc',
-    status: 'active',
-    modules: ['automations', 'billing'],
-    paymentStatus: 'past_due',
-    lastActivity: new Date(Date.now() - 1000 * 60 * 60 * 24),
-  },
-  {
-    id: '4',
-    name: 'Emily Brown',
-    company: 'Design Studio',
-    status: 'inactive',
-    modules: ['voice'],
-    paymentStatus: 'canceled',
-    lastActivity: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7),
-  },
-];
-
-const paymentStatusStyles: Record<string, string> = {
-  active: 'bg-success/10 text-success border-success/20',
-  past_due: 'bg-warning/10 text-warning border-warning/20',
-  canceled: 'bg-destructive/10 text-destructive border-destructive/20',
-  none: 'bg-muted text-muted-foreground border-muted',
-};
+import { usePods, useDeleteClient } from '@/hooks/useSupabaseData';
 
 export default function ClientsList() {
   const navigate = useNavigate();
+  const { data: pods, isLoading, error } = usePods();
+  const deleteClient = useDeleteClient();
   const [searchQuery, setSearchQuery] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [podToDelete, setPodToDelete] = useState<{ id: string; name: string } | null>(null);
 
-  const filteredClients = mockClients.filter(
-    (client) =>
-      client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      client.company.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredPods = pods?.filter(
+    (pod) =>
+      pod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      pod.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      pod.contact_email?.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
+
+  const handleDeleteClick = (e: React.MouseEvent, pod: { id: string; name: string }) => {
+    e.stopPropagation();
+    setPodToDelete(pod);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (podToDelete) {
+      await deleteClient.mutateAsync(podToDelete.id);
+      setDeleteDialogOpen(false);
+      setPodToDelete(null);
+    }
+  };
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <p className="text-destructive mb-4">Failed to load clients</p>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -116,71 +111,78 @@ export default function ClientsList() {
               <TableHead>Client</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Modules</TableHead>
-              <TableHead>Payment</TableHead>
-              <TableHead>Last Activity</TableHead>
+              <TableHead>Last Updated</TableHead>
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredClients.length === 0 ? (
+            {isLoading ? (
+              // Loading skeleton
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                  </TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                </TableRow>
+              ))
+            ) : filteredPods.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={5} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Building2 className="h-8 w-8 text-muted-foreground" />
-                    <p className="text-muted-foreground">No clients found</p>
+                    <p className="text-muted-foreground">
+                      {searchQuery ? 'No clients match your search' : 'No clients yet. Click "Create Client" to add your first one.'}
+                    </p>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
-              filteredClients.map((client) => (
+              filteredPods.map((pod) => (
                 <TableRow
-                  key={client.id}
+                  key={pod.id}
                   className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => navigate(`/admin/clients/${client.id}`)}
+                  onClick={() => navigate(`/admin/clients/${pod.id}`)}
                 >
                   <TableCell>
                     <div>
-                      <p className="font-medium">{client.name}</p>
-                      <p className="text-sm text-muted-foreground">{client.company}</p>
+                      <p className="font-medium">{pod.name}</p>
+                      <p className="text-sm text-muted-foreground">{pod.company_name || pod.contact_email}</p>
                     </div>
                   </TableCell>
                   <TableCell>
                     <Badge
-                      variant={client.status === 'active' ? 'default' : 'secondary'}
-                      className={client.status === 'active' ? 'bg-success/10 text-success border-success/20' : ''}
+                      variant="default"
+                      className="bg-success/10 text-success border-success/20"
                     >
-                      {client.status}
+                      active
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {client.modules.includes('voice') && (
+                      {pod.pod_settings?.voice_enabled && (
                         <div className="rounded-md bg-muted p-1.5" title="Voice">
                           <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                       )}
-                      {client.modules.includes('automations') && (
+                      {pod.pod_settings?.automations_enabled && (
                         <div className="rounded-md bg-muted p-1.5" title="Automations">
                           <Zap className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                       )}
-                      {client.modules.includes('billing') && (
-                        <div className="rounded-md bg-muted p-1.5" title="Billing">
-                          <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
-                        </div>
+                      {!pod.pod_settings?.voice_enabled && !pod.pod_settings?.automations_enabled && (
+                        <span className="text-sm text-muted-foreground">None</span>
                       )}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={cn('capitalize', paymentStatusStyles[client.paymentStatus] || paymentStatusStyles.none)}
-                    >
-                      {client.paymentStatus.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {formatDistanceToNow(client.lastActivity, { addSuffix: true })}
+                    {formatDistanceToNow(new Date(pod.updated_at), { addSuffix: true })}
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
@@ -190,11 +192,19 @@ export default function ClientsList() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => navigate(`/admin/clients/${client.id}`)}>
+                        <DropdownMenuItem onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/admin/clients/${pod.id}`);
+                        }}>
                           View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem>Edit Client</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                        <DropdownMenuItem 
+                          className="text-destructive"
+                          onClick={(e) => handleDeleteClick(e, { id: pod.id, name: pod.name })}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -209,10 +219,29 @@ export default function ClientsList() {
       <CreateClientModal
         open={createModalOpen}
         onOpenChange={setCreateModalOpen}
-        onSuccess={() => {
-          // TODO: Refetch clients from database
-        }}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{podToDelete?.name}</strong> and all their data including call logs, automation events, and notes. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteClient.isPending}
+            >
+              {deleteClient.isPending ? 'Deleting...' : 'Delete Client'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -14,13 +14,14 @@ import NotFound from "@/pages/NotFound";
 // Admin Pages
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import ClientsList from "@/pages/admin/ClientsList";
+import ClientDetail from "@/pages/admin/ClientDetail";
+import ViewAsClient from "@/pages/admin/ViewAsClient";
 import AdminSettings from "@/pages/admin/AdminSettings";
 
 // Client Pages
 import ClientDashboard from "@/pages/dashboard/ClientDashboard";
 import CallLogs from "@/pages/dashboard/CallLogs";
 import Automations from "@/pages/dashboard/Automations";
-import Billing from "@/pages/dashboard/Billing";
 import Team from "@/pages/dashboard/Team";
 import ClientSettings from "@/pages/dashboard/ClientSettings";
 
@@ -48,7 +49,23 @@ const App = () => (
             >
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/clients" element={<ClientsList />} />
+              <Route path="/admin/clients/:podId" element={<ClientDetail />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
+            </Route>
+
+            {/* View as Client route - special layout with banner */}
+            <Route
+              path="/admin/clients/:podId/view-as-client"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <ViewAsClient />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<ClientDashboard />} />
+              <Route path="calls" element={<CallLogs />} />
+              <Route path="automations" element={<Automations />} />
+              <Route path="settings" element={<ClientSettings />} />
             </Route>
 
             {/* Client routes */}
@@ -62,7 +79,6 @@ const App = () => (
               <Route path="/dashboard" element={<ClientDashboard />} />
               <Route path="/dashboard/calls" element={<CallLogs />} />
               <Route path="/dashboard/automations" element={<Automations />} />
-              <Route path="/dashboard/billing" element={<Billing />} />
               <Route path="/dashboard/team" element={<Team />} />
               <Route path="/dashboard/settings" element={<ClientSettings />} />
             </Route>
