@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Phone, Zap, CreditCard, MoreVertical, Building2 } from 'lucide-react';
+import { CreateClientModal } from '@/components/admin/CreateClientModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -71,6 +72,7 @@ const paymentStatusStyles: Record<string, string> = {
 export default function ClientsList() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const filteredClients = mockClients.filter(
     (client) =>
@@ -86,7 +88,10 @@ export default function ClientsList() {
           <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
           <p className="text-muted-foreground">Manage your client pods and workspaces</p>
         </div>
-        <Button className="gradient-orange text-white shadow-glow-orange">
+        <Button 
+          className="gradient-orange text-white shadow-glow-orange"
+          onClick={() => setCreateModalOpen(true)}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Create Client
         </Button>
@@ -199,6 +204,15 @@ export default function ClientsList() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Create Client Modal */}
+      <CreateClientModal
+        open={createModalOpen}
+        onOpenChange={setCreateModalOpen}
+        onSuccess={() => {
+          // TODO: Refetch clients from database
+        }}
+      />
     </div>
   );
 }
