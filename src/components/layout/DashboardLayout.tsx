@@ -50,7 +50,6 @@ const clientNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Call Logs', href: '/dashboard/calls', icon: Phone, requiresModule: 'voice' },
   { label: 'Automations', href: '/dashboard/automations', icon: Zap, requiresModule: 'automations' },
-  { label: 'Billing', href: '/dashboard/billing', icon: CreditCard, requiresModule: 'billing' },
   { label: 'Team', href: '/dashboard/team', icon: UserPlus },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];

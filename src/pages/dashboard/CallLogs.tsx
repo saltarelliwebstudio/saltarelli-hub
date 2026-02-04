@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { useOutletContext, Navigate } from 'react-router-dom';
 import { Search, Phone, PhoneIncoming, PhoneOutgoing, Play, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
   TableBody,
@@ -28,54 +30,12 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { useMyPod, useCallLogs, CallLog, PodWithSettings } from '@/hooks/useSupabaseData';
 
-// Mock data
-const mockCallLogs = [
-  {
-    id: '1',
-    caller_number: '(555) 123-4567',
-    called_number: '(555) 999-0000',
-    direction: 'inbound',
-    duration_seconds: 222,
-    call_status: 'completed',
-    call_started_at: new Date(Date.now() - 1000 * 60 * 30),
-    transcript: 'Agent: Thank you for calling Acme Corporation. How can I help you today?\n\nCaller: Hi, I\'d like to schedule an appointment for next week.\n\nAgent: Absolutely! I\'d be happy to help you with that. What day works best for you?\n\nCaller: Wednesday would be great if you have any openings.\n\nAgent: Let me check our availability. We have openings at 10 AM, 2 PM, and 4 PM on Wednesday. Which time would you prefer?\n\nCaller: 2 PM works perfectly.\n\nAgent: Excellent! I\'ve scheduled your appointment for Wednesday at 2 PM. You\'ll receive a confirmation email shortly. Is there anything else I can help you with?\n\nCaller: No, that\'s all. Thank you!\n\nAgent: You\'re welcome! Have a great day!',
-    recording_url: 'https://example.com/recording.mp3',
-  },
-  {
-    id: '2',
-    caller_number: '(555) 987-6543',
-    called_number: '(555) 999-0000',
-    direction: 'inbound',
-    duration_seconds: 0,
-    call_status: 'missed',
-    call_started_at: new Date(Date.now() - 1000 * 60 * 60 * 2),
-    transcript: null,
-    recording_url: null,
-  },
-  {
-    id: '3',
-    caller_number: '(555) 999-0000',
-    called_number: '(555) 456-7890',
-    direction: 'outbound',
-    duration_seconds: 185,
-    call_status: 'completed',
-    call_started_at: new Date(Date.now() - 1000 * 60 * 60 * 4),
-    transcript: 'Agent: Hello, this is a follow-up call from Acme Corporation regarding your recent inquiry...',
-    recording_url: 'https://example.com/recording2.mp3',
-  },
-  {
-    id: '4',
-    caller_number: '(555) 111-2222',
-    called_number: '(555) 999-0000',
-    direction: 'inbound',
-    duration_seconds: 45,
-    call_status: 'voicemail',
-    call_started_at: new Date(Date.now() - 1000 * 60 * 60 * 24),
-    transcript: 'Voicemail message left by caller.',
-    recording_url: 'https://example.com/voicemail.mp3',
-  },
-];
+interface ViewAsClientContext {
+  pod: PodWithSettings;
+  isViewAsClient: boolean;
+}
 
 const statusStyles: Record<string, string> = {
   completed: 'bg-success/10 text-success border-success/20',
@@ -84,26 +44,51 @@ const statusStyles: Record<string, string> = {
   voicemail: 'bg-warning/10 text-warning border-warning/20',
 };
 
-function formatDuration(seconds: number): string {
-  if (seconds === 0) return '-';
+function formatDuration(seconds: number | null): string {
+  if (!seconds || seconds === 0) return '-';
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return `${mins}m ${secs}s`;
 }
 
+function formatPhone(phone: string | null): string {
+  if (!phone) return 'Unknown';
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  if (cleaned.length === 11 && cleaned.startsWith('1')) {
+    return `(${cleaned.slice(1, 4)}) ${cleaned.slice(4, 7)}-${cleaned.slice(7)}`;
+  }
+  return phone;
+}
+
 export default function CallLogs() {
+  const context = useOutletContext<ViewAsClientContext | null>();
+  const isViewAsClient = context?.isViewAsClient;
+  const viewAsPod = context?.pod;
+
+  const { data: myPod, isLoading: podLoading } = useMyPod();
+  const pod = isViewAsClient ? viewAsPod : myPod;
+  const podId = pod?.id;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [selectedCall, setSelectedCall] = useState<typeof mockCallLogs[0] | null>(null);
+  const [directionFilter, setDirectionFilter] = useState<string>('all');
+  const [selectedCall, setSelectedCall] = useState<CallLog | null>(null);
 
-  const filteredCalls = mockCallLogs.filter((call) => {
-    const matchesSearch =
-      call.caller_number.includes(searchQuery) ||
-      call.called_number.includes(searchQuery) ||
-      call.transcript?.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || call.call_status === statusFilter;
-    return matchesSearch && matchesStatus;
+  const { data: callLogs, isLoading: callsLoading } = useCallLogs(podId, {
+    status: statusFilter !== 'all' ? statusFilter : undefined,
+    direction: directionFilter !== 'all' ? directionFilter : undefined,
+    search: searchQuery || undefined,
   });
+
+  // Redirect if voice module is not enabled
+  if (!podLoading && pod && !pod.pod_settings?.voice_enabled && !isViewAsClient) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const isLoading = podLoading || callsLoading;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -136,6 +121,16 @@ export default function CallLogs() {
             <SelectItem value="voicemail">Voicemail</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={directionFilter} onValueChange={setDirectionFilter}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Filter by direction" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Directions</SelectItem>
+            <SelectItem value="inbound">Inbound</SelectItem>
+            <SelectItem value="outbound">Outbound</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -152,26 +147,45 @@ export default function CallLogs() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredCalls.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-8 w-16" /></TableCell>
+                </TableRow>
+              ))
+            ) : !callLogs || callLogs.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Phone className="h-8 w-8 text-muted-foreground" />
-                    <p className="text-muted-foreground">No calls found</p>
+                    <p className="text-muted-foreground">
+                      {searchQuery || statusFilter !== 'all' || directionFilter !== 'all' 
+                        ? 'No calls match your filters' 
+                        : 'No calls synced yet. Make sure a Retell account is configured and active.'}
+                    </p>
                   </div>
                 </TableCell>
               </TableRow>
             ) : (
-              filteredCalls.map((call) => (
+              callLogs.map((call) => (
                 <TableRow key={call.id} className="cursor-pointer hover:bg-muted/50">
                   <TableCell className="font-medium">
-                    {format(call.call_started_at, 'MMM d, yyyy')}
-                    <span className="block text-sm text-muted-foreground">
-                      {format(call.call_started_at, 'h:mm a')}
-                    </span>
+                    {call.call_started_at ? (
+                      <>
+                        {format(new Date(call.call_started_at), 'MMM d, yyyy')}
+                        <span className="block text-sm text-muted-foreground">
+                          {format(new Date(call.call_started_at), 'h:mm a')}
+                        </span>
+                      </>
+                    ) : '—'}
                   </TableCell>
                   <TableCell>
-                    {call.direction === 'inbound' ? call.caller_number : call.called_number}
+                    {formatPhone(call.direction === 'inbound' ? call.caller_number : call.called_number)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -187,7 +201,7 @@ export default function CallLogs() {
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={cn('capitalize', statusStyles[call.call_status])}
+                      className={cn('capitalize', statusStyles[call.call_status || 'completed'])}
                     >
                       {call.call_status}
                     </Badge>
@@ -217,7 +231,7 @@ export default function CallLogs() {
               Call Details
             </DialogTitle>
             <DialogDescription>
-              {selectedCall && format(selectedCall.call_started_at, 'MMMM d, yyyy at h:mm a')}
+              {selectedCall?.call_started_at && format(new Date(selectedCall.call_started_at), 'MMMM d, yyyy at h:mm a')}
             </DialogDescription>
           </DialogHeader>
 
@@ -227,11 +241,11 @@ export default function CallLogs() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">From</p>
-                  <p className="font-medium">{selectedCall.caller_number}</p>
+                  <p className="font-medium">{formatPhone(selectedCall.caller_number)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">To</p>
-                  <p className="font-medium">{selectedCall.called_number}</p>
+                  <p className="font-medium">{formatPhone(selectedCall.called_number)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Duration</p>
@@ -241,7 +255,7 @@ export default function CallLogs() {
                   <p className="text-sm text-muted-foreground">Status</p>
                   <Badge
                     variant="outline"
-                    className={cn('capitalize mt-1', statusStyles[selectedCall.call_status])}
+                    className={cn('capitalize mt-1', statusStyles[selectedCall.call_status || 'completed'])}
                   >
                     {selectedCall.call_status}
                   </Badge>

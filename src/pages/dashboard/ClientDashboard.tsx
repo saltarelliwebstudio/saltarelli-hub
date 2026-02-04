@@ -1,180 +1,177 @@
-import { Phone, Clock, PhoneMissed, Zap, CheckCircle, XCircle, CreditCard, Calendar } from 'lucide-react';
+import { Phone, Clock, Zap, CheckCircle, XCircle } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
 import { StatCard } from '@/components/ui/stat-card';
 import { ActivityFeed, ActivityItem } from '@/components/ui/activity-feed';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '@/contexts/AuthContext';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useMyPod, useClientStats, useCallLogs, useAutomationLogs, PodWithSettings } from '@/hooks/useSupabaseData';
 
-// Mock data - will be replaced with real data
-const mockPodSettings = {
-  voice_enabled: true,
-  automations_enabled: true,
-  billing_enabled: true,
-};
-
-const mockVoiceStats = {
-  totalCalls: 156,
-  avgDuration: '2m 34s',
-  missedCalls: 12,
-};
-
-const mockAutomationStats = {
-  totalEvents: 423,
-  successful: 398,
-  failed: 25,
-};
-
-const mockBillingInfo = {
-  planName: 'Voice Agent - Premium',
-  nextPayment: 'Feb 15, 2026',
-  amount: '$299/mo',
-};
-
-const mockActivity: ActivityItem[] = [
-  {
-    id: '1',
-    type: 'call',
-    title: 'Inbound call completed',
-    description: '3m 42s • (555) 123-4567',
-    status: 'success',
-    timestamp: new Date(Date.now() - 1000 * 60 * 15),
-  },
-  {
-    id: '2',
-    type: 'automation',
-    title: 'Lead captured from website',
-    description: 'john@example.com',
-    status: 'success',
-    timestamp: new Date(Date.now() - 1000 * 60 * 32),
-  },
-  {
-    id: '3',
-    type: 'automation',
-    title: 'SMS notification sent',
-    description: 'Appointment reminder',
-    status: 'success',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60),
-  },
-  {
-    id: '4',
-    type: 'call',
-    title: 'Missed call',
-    description: '(555) 987-6543',
-    status: 'failed',
-    timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2),
-  },
-];
+interface ViewAsClientContext {
+  pod: PodWithSettings;
+  isViewAsClient: boolean;
+}
 
 export default function ClientDashboard() {
-  const { userWithRole } = useAuth();
+  // Check if we're in "View as Client" mode
+  const context = useOutletContext<ViewAsClientContext | null>();
+  const isViewAsClient = context?.isViewAsClient;
+  const viewAsPod = context?.pod;
+
+  // If not in view-as mode, get the user's own pod
+  const { data: myPod, isLoading: podLoading } = useMyPod();
+  
+  const pod = isViewAsClient ? viewAsPod : myPod;
+  const podId = pod?.id;
+
+  const { data: stats, isLoading: statsLoading } = useClientStats(podId);
+  const { data: recentCalls } = useCallLogs(podId, { limit: 5 });
+  const { data: recentAutomations } = useAutomationLogs(podId, { limit: 5 });
+
+  const voiceEnabled = pod?.pod_settings?.voice_enabled;
+  const automationsEnabled = pod?.pod_settings?.automations_enabled;
+
+  // Combine recent activity
+  const recentActivity: ActivityItem[] = [
+    ...(recentCalls?.map(call => ({
+      id: call.id,
+      type: 'call' as const,
+      title: call.call_status === 'missed' ? 'Missed call' : 
+             call.call_status === 'completed' ? 'Call completed' : 
+             `Call ${call.call_status}`,
+      description: `${call.direction === 'inbound' ? 'From' : 'To'} ${call.caller_number || call.called_number || 'Unknown'}`,
+      status: call.call_status === 'completed' ? 'success' as const : 
+              call.call_status === 'missed' || call.call_status === 'failed' ? 'failed' as const : 
+              'pending' as const,
+      timestamp: new Date(call.call_started_at || call.created_at),
+    })) || []),
+    ...(recentAutomations?.map(auto => ({
+      id: auto.id,
+      type: 'automation' as const,
+      title: auto.event_label || auto.event_type,
+      description: `${auto.module_type} • ${auto.status}`,
+      status: auto.status === 'success' ? 'success' as const : 
+              auto.status === 'failed' ? 'failed' as const : 
+              'pending' as const,
+      timestamp: new Date(auto.created_at),
+    })) || []),
+  ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 10);
+
+  // Helper to format duration
+  const formatDuration = (seconds: number): string => {
+    if (!seconds) return '0s';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins === 0) return `${secs}s`;
+    return `${mins}m ${secs}s`;
+  };
+
+  if (podLoading && !isViewAsClient) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-[120px] rounded-xl" />
+          <Skeleton className="h-[120px] rounded-xl" />
+          <Skeleton className="h-[120px] rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!pod) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12">
+        <p className="text-muted-foreground">No workspace found. Please contact your administrator.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">
-          Welcome back, <span className="text-gradient-orange">{userWithRole?.full_name?.split(' ')[0] || 'there'}</span>
+          Welcome back, {pod.company_name || pod.name}
         </h1>
-        <p className="text-muted-foreground">Here's what's happening with your account today</p>
+        <p className="text-muted-foreground">
+          Here's an overview of your activity this month
+        </p>
       </div>
 
-      {/* Voice Stats */}
-      {mockPodSettings.voice_enabled && (
-        <div>
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Phone className="h-5 w-5 text-accent" />
-            Voice Agent
-          </h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            <StatCard
-              title="Total Calls This Month"
-              value={mockVoiceStats.totalCalls}
-              icon={Phone}
-              trend={{ value: 8, isPositive: true }}
-            />
-            <StatCard
-              title="Average Duration"
-              value={mockVoiceStats.avgDuration}
-              icon={Clock}
-            />
-            <StatCard
-              title="Missed Calls"
-              value={mockVoiceStats.missedCalls}
-              icon={PhoneMissed}
-              variant={mockVoiceStats.missedCalls > 10 ? 'warning' : 'default'}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Automation Stats */}
-      {mockPodSettings.automations_enabled && (
-        <div>
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Zap className="h-5 w-5 text-accent" />
-            Automations
-          </h2>
-          <div className="grid gap-4 md:grid-cols-3">
-            <StatCard
-              title="Total Events This Month"
-              value={mockAutomationStats.totalEvents}
-              icon={Zap}
-              trend={{ value: 23, isPositive: true }}
-            />
-            <StatCard
-              title="Successful Runs"
-              value={mockAutomationStats.successful}
-              icon={CheckCircle}
-              variant="success"
-            />
-            <StatCard
-              title="Failed Runs"
-              value={mockAutomationStats.failed}
-              icon={XCircle}
-              variant={mockAutomationStats.failed > 20 ? 'destructive' : 'default'}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Billing Summary */}
-      {mockPodSettings.billing_enabled && (
-        <div>
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-accent" />
-            Billing
-          </h2>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Current Plan</p>
-                  <p className="text-xl font-semibold">{mockBillingInfo.planName}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Next Payment</p>
-                  <p className="text-xl font-semibold flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    {mockBillingInfo.nextPayment}
-                  </p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Amount</p>
-                  <p className="text-xl font-semibold text-gradient-orange">{mockBillingInfo.amount}</p>
-                </div>
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {statsLoading ? (
+          <>
+            <Skeleton className="h-[120px] rounded-xl" />
+            <Skeleton className="h-[120px] rounded-xl" />
+            <Skeleton className="h-[120px] rounded-xl" />
+          </>
+        ) : (
+          <>
+            {voiceEnabled && (
+              <>
+                <StatCard
+                  title="Total Calls"
+                  value={stats?.totalCalls || 0}
+                  icon={Phone}
+                />
+                <StatCard
+                  title="Avg Duration"
+                  value={formatDuration(stats?.avgDuration || 0)}
+                  icon={Clock}
+                />
+                <StatCard
+                  title="Missed Calls"
+                  value={stats?.missedCalls || 0}
+                  icon={Phone}
+                  variant={stats?.missedCalls && stats.missedCalls > 0 ? 'warning' : 'default'}
+                />
+              </>
+            )}
+            {automationsEnabled && (
+              <>
+                <StatCard
+                  title="Total Events"
+                  value={stats?.totalAutomations || 0}
+                  icon={Zap}
+                />
+                <StatCard
+                  title="Successful"
+                  value={stats?.successfulAutomations || 0}
+                  icon={CheckCircle}
+                />
+                <StatCard
+                  title="Failed"
+                  value={stats?.failedAutomations || 0}
+                  icon={XCircle}
+                  variant={stats?.failedAutomations && stats.failedAutomations > 0 ? 'warning' : 'default'}
+                />
+              </>
+            )}
+            {!voiceEnabled && !automationsEnabled && (
+              <div className="col-span-full text-center py-8 text-muted-foreground">
+                <p>No modules are currently enabled for your account.</p>
+                <p className="text-sm">Contact your administrator to enable features.</p>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+            )}
+          </>
+        )}
+      </div>
 
       {/* Recent Activity */}
       <Card>
         <CardHeader>
           <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Your latest events and notifications</CardDescription>
+          <CardDescription>Your latest calls and automation events</CardDescription>
         </CardHeader>
         <CardContent>
-          <ActivityFeed items={mockActivity} />
+          {recentActivity.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Your dashboard will populate as data comes in. Sit tight!</p>
+            </div>
+          ) : (
+            <ActivityFeed items={recentActivity} />
+          )}
         </CardContent>
       </Card>
     </div>

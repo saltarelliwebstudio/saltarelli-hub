@@ -138,7 +138,9 @@ export type Database = {
           metadata: Json | null
           pod_id: string
           recording_url: string | null
+          retell_account_id: string | null
           retell_call_id: string | null
+          summary: string | null
           transcript: string | null
         }
         Insert: {
@@ -153,7 +155,9 @@ export type Database = {
           metadata?: Json | null
           pod_id: string
           recording_url?: string | null
+          retell_account_id?: string | null
           retell_call_id?: string | null
+          summary?: string | null
           transcript?: string | null
         }
         Update: {
@@ -168,7 +172,9 @@ export type Database = {
           metadata?: Json | null
           pod_id?: string
           recording_url?: string | null
+          retell_account_id?: string | null
           retell_call_id?: string | null
+          summary?: string | null
           transcript?: string | null
         }
         Relationships: [
@@ -177,6 +183,13 @@ export type Database = {
             columns: ["pod_id"]
             isOneToOne: false
             referencedRelation: "pods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_logs_retell_account_id_fkey"
+            columns: ["retell_account_id"]
+            isOneToOne: false
+            referencedRelation: "retell_accounts"
             referencedColumns: ["id"]
           },
         ]
@@ -369,6 +382,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      retell_accounts: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          last_synced_at: string | null
+          pod_id: string
+          retell_agent_id: string
+          retell_api_key: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_synced_at?: string | null
+          pod_id: string
+          retell_agent_id: string
+          retell_api_key: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          last_synced_at?: string | null
+          pod_id?: string
+          retell_agent_id?: string
+          retell_api_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retell_accounts_pod_id_fkey"
+            columns: ["pod_id"]
+            isOneToOne: false
+            referencedRelation: "pods"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       subscriptions: {
         Row: {
