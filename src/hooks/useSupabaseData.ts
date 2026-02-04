@@ -130,7 +130,7 @@ export function useRetellAccounts(podId: string | undefined) {
   });
 }
 
-// Fetch call logs for a pod
+// Fetch call logs for a pod (simple version with optional limit)
 export function useCallLogs(podId: string | undefined, options?: {
   limit?: number;
   status?: string;
@@ -187,6 +187,59 @@ export function useCallLogs(podId: string | undefined, options?: {
       return data as CallLog[];
     },
     enabled: !!podId,
+  });
+}
+
+// Fetch call logs with pagination (for full history)
+export function useCallLogsPaginated(podId: string | undefined, options: {
+  page: number;
+  pageSize: number;
+  status?: string;
+  direction?: string;
+  search?: string;
+}) {
+  return useQuery({
+    queryKey: ['call-logs-paginated', podId, options],
+    queryFn: async () => {
+      if (!podId) return { data: [], count: 0 };
+
+      const from = (options.page - 1) * options.pageSize;
+      const to = from + options.pageSize - 1;
+
+      let query = supabase
+        .from('call_logs')
+        .select('*', { count: 'exact' })
+        .eq('pod_id', podId)
+        .order('call_started_at', { ascending: false })
+        .range(from, to);
+
+      if (options.status && options.status !== 'all') {
+        query = query.eq('call_status', options.status as 'completed' | 'failed' | 'missed' | 'voicemail');
+      }
+
+      if (options.direction && options.direction !== 'all') {
+        query = query.eq('direction', options.direction as 'inbound' | 'outbound');
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) throw error;
+      
+      // Filter by search if provided (client-side)
+      let filteredData = data as CallLog[];
+      if (options.search && filteredData) {
+        const searchLower = options.search.toLowerCase();
+        filteredData = filteredData.filter(call => 
+          call.caller_number?.toLowerCase().includes(searchLower) ||
+          call.called_number?.toLowerCase().includes(searchLower) ||
+          call.transcript?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      return { data: filteredData, count: count || 0 };
+    },
+    enabled: !!podId,
+    placeholderData: (previousData) => previousData,
   });
 }
 

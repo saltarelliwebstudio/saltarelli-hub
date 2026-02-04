@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useOutletContext, Navigate } from 'react-router-dom';
-import { Search, Phone, PhoneIncoming, PhoneOutgoing, Play, FileText } from 'lucide-react';
+import { Search, Phone, PhoneIncoming, PhoneOutgoing, Clock } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,7 +30,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { useMyPod, useCallLogs, CallLog, PodWithSettings } from '@/hooks/useSupabaseData';
+import { useMyPod, useCallLogsPaginated, CallLog, PodWithSettings } from '@/hooks/useSupabaseData';
 
 interface ViewAsClientContext {
   pod: PodWithSettings;
@@ -76,12 +76,25 @@ export default function CallLogs() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [directionFilter, setDirectionFilter] = useState<string>('all');
   const [selectedCall, setSelectedCall] = useState<CallLog | null>(null);
+  const [page, setPage] = useState(1);
+  const pageSize = 25;
 
-  const { data: callLogs, isLoading: callsLoading } = useCallLogs(podId, {
+  const { data: paginatedData, isLoading: callsLoading, isFetching } = useCallLogsPaginated(podId, {
+    page,
+    pageSize,
     status: statusFilter !== 'all' ? statusFilter : undefined,
     direction: directionFilter !== 'all' ? directionFilter : undefined,
     search: searchQuery || undefined,
   });
+
+  const callLogs = paginatedData?.data ?? [];
+  const totalCount = paginatedData?.count ?? 0;
+  const hasMore = page * pageSize < totalCount;
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, directionFilter, searchQuery]);
 
   // Redirect if voice module is not enabled
   if (!podLoading && pod && !pod.pod_settings?.voice_enabled && !isViewAsClient) {
@@ -222,76 +235,90 @@ export default function CallLogs() {
         </Table>
       </div>
 
-      {/* Call Detail Dialog */}
+      {/* Pagination */}
+      {totalCount > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            Showing {Math.min((page - 1) * pageSize + 1, totalCount)} - {Math.min(page * pageSize, totalCount)} of {totalCount} calls
+          </p>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page === 1 || isFetching}
+              onClick={() => setPage(p => p - 1)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasMore || isFetching}
+              onClick={() => setPage(p => p + 1)}
+            >
+              {isFetching ? 'Loading...' : 'Next'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Call Detail Dialog - Simplified */}
       <Dialog open={!!selectedCall} onOpenChange={() => setSelectedCall(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Phone className="h-5 w-5" />
               Call Details
             </DialogTitle>
             <DialogDescription>
-              {selectedCall?.call_started_at && format(new Date(selectedCall.call_started_at), 'MMMM d, yyyy at h:mm a')}
+              {selectedCall?.call_started_at && format(new Date(selectedCall.call_started_at), 'MMMM d, yyyy \'at\' h:mm a')}
             </DialogDescription>
           </DialogHeader>
 
           {selectedCall && (
-            <div className="space-y-6">
-              {/* Call Info */}
-              <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-6 flex-1 overflow-hidden flex flex-col">
+              {/* Call Info - Simplified */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">From</p>
-                  <p className="font-medium">{formatPhone(selectedCall.caller_number)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">To</p>
-                  <p className="font-medium">{formatPhone(selectedCall.called_number)}</p>
+                  <p className="text-sm text-muted-foreground">Phone Number</p>
+                  <p className="font-medium">
+                    {formatPhone(selectedCall.direction === 'inbound' ? selectedCall.caller_number : selectedCall.called_number)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Duration</p>
-                  <p className="font-medium">{formatDuration(selectedCall.duration_seconds)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Status</p>
-                  <Badge
-                    variant="outline"
-                    className={cn('capitalize mt-1', statusStyles[selectedCall.call_status || 'completed'])}
-                  >
-                    {selectedCall.call_status}
-                  </Badge>
+                  <p className="font-medium flex items-center gap-1">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    {formatDuration(selectedCall.duration_seconds)}
+                  </p>
                 </div>
               </div>
 
-              {/* Recording */}
-              {selectedCall.recording_url && (
+              {/* Summary - only show if exists */}
+              {selectedCall.summary && (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium flex items-center gap-2">
-                    <Play className="h-4 w-4" />
-                    Recording
+                  <p className="text-sm font-medium">Summary</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {selectedCall.summary}
                   </p>
-                  <div className="rounded-lg bg-muted p-4">
-                    <audio controls className="w-full">
-                      <source src={selectedCall.recording_url} type="audio/mpeg" />
-                      Your browser does not support audio playback.
-                    </audio>
-                  </div>
                 </div>
               )}
 
-              {/* Transcript */}
-              {selectedCall.transcript && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Transcript
-                  </p>
-                  <ScrollArea className="h-[200px] rounded-lg border bg-muted/50 p-4">
-                    <pre className="whitespace-pre-wrap text-sm font-sans">
+              {/* Transcript - scrollable */}
+              <div className="space-y-2 flex-1 overflow-hidden flex flex-col min-h-0">
+                <p className="text-sm font-medium">Transcript</p>
+                {selectedCall.transcript ? (
+                  <ScrollArea className="flex-1 rounded-lg border bg-muted/30 p-4">
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
                       {selectedCall.transcript}
-                    </pre>
+                    </p>
                   </ScrollArea>
-                </div>
-              )}
+                ) : (
+                  <div className="flex-1 rounded-lg border bg-muted/30 p-4 flex items-center justify-center">
+                    <p className="text-sm text-muted-foreground italic">Transcript not available</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>

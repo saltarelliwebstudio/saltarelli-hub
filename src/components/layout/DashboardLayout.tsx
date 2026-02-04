@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { useState, useMemo } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { signOut } from '@/lib/auth';
 import { useTheme } from '@/hooks/useTheme';
 import { useToast } from '@/hooks/use-toast';
+import { useMyPod } from '@/hooks/useSupabaseData';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -20,7 +21,6 @@ import {
   Users,
   Phone,
   Zap,
-  CreditCard,
   Settings,
   UserPlus,
   LogOut,
@@ -56,13 +56,34 @@ const clientNavItems: NavItem[] = [
 
 export default function DashboardLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { userWithRole, isAdmin } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const navItems = isAdmin ? adminNavItems : clientNavItems;
+  
+  // Fetch pod settings for clients to filter sidebar items
+  const { data: myPod } = useMyPod();
+  
+  // Filter nav items based on pod settings for clients
+  const navItems = useMemo(() => {
+    if (isAdmin) return adminNavItems;
+    
+    // Filter client nav items based on pod module settings
+    return clientNavItems.filter(item => {
+      if (!item.requiresModule) return true;
+      if (!myPod?.pod_settings) return false;
+      
+      if (item.requiresModule === 'voice') {
+        return myPod.pod_settings.voice_enabled;
+      }
+      if (item.requiresModule === 'automations') {
+        return myPod.pod_settings.automations_enabled;
+      }
+      return true;
+    });
+  }, [isAdmin, myPod?.pod_settings]);
 
   const handleSignOut = async () => {
     try {
