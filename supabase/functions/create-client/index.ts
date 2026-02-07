@@ -9,6 +9,7 @@ interface RetellAccount {
   label: string;
   retell_api_key: string;
   retell_agent_id: string;
+  google_sheet_url?: string | null;
 }
 
 interface CreateClientRequest {
@@ -149,6 +150,7 @@ Deno.serve(async (req) => {
         label: acc.label,
         retell_api_key: acc.retell_api_key,
         retell_agent_id: acc.retell_agent_id,
+        google_sheet_url: acc.google_sheet_url || null,
         is_active: true,
       }));
 
