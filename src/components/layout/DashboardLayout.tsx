@@ -254,6 +254,16 @@ export default function DashboardLayout() {
         <main className="flex-1 p-4 lg:p-6">
           <Outlet />
         </main>
+
+        {/* Footer */}
+        <footer className="border-t border-border px-4 lg:px-6 py-3 flex items-center justify-center">
+          <a
+            href="/privacy"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Privacy Policy
+          </a>
+        </footer>
       </div>
     </div>
   );

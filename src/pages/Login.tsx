@@ -243,6 +243,10 @@ export default function Login() {
 
         <p className="text-center text-xs text-muted-foreground mt-6">
           © {new Date().getFullYear()} Saltarelli Web Studio. All rights reserved.
+          {' · '}
+          <a href="/privacy" className="hover:text-accent transition-colors underline underline-offset-2">
+            Privacy Policy
+          </a>
         </p>
       </div>
     </div>
