@@ -9,6 +9,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 
 // Pages
 import Login from "@/pages/Login";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import NotFound from "@/pages/NotFound";
 
 // Admin Pages
@@ -37,6 +38,7 @@ const App = () => (
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
 
             {/* Admin routes */}
