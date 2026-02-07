@@ -23,6 +23,7 @@ import {
   useAutomationLogs, 
   useRetellAccounts,
   useAdminNotes,
+  usePodCount,
   useUpdatePod,
   useUpdatePodSettings,
   useResetClientPassword,
@@ -99,6 +100,8 @@ export default function ClientDetail() {
   const { data: automationLogs, isLoading: automationsLoading } = useAutomationLogs(podId, { limit: 50 });
   const { data: retellAccounts, isLoading: retellLoading } = useRetellAccounts(podId);
   const { data: adminNotes, isLoading: notesLoading } = useAdminNotes(podId);
+  const { data: podCallCount } = usePodCount(podId, 'call_logs');
+  const { data: podAutomationCount } = usePodCount(podId, 'automation_logs');
   
   const updatePod = useUpdatePod();
   const updatePodSettings = useUpdatePodSettings();
@@ -116,7 +119,7 @@ export default function ClientDetail() {
   const [newNote, setNewNote] = useState('');
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const [retellAccountModalOpen, setRetellAccountModalOpen] = useState(false);
-  const [newRetellAccount, setNewRetellAccount] = useState({ label: '', retell_api_key: '', retell_agent_id: '' });
+  const [newRetellAccount, setNewRetellAccount] = useState({ label: '', retell_api_key: '', retell_agent_id: '', google_sheet_url: '' });
 
   const [editForm, setEditForm] = useState({
     name: '',
@@ -181,9 +184,14 @@ export default function ClientDetail() {
 
   const handleAddRetellAccount = async () => {
     if (!podId || !newRetellAccount.label || !newRetellAccount.retell_api_key || !newRetellAccount.retell_agent_id) return;
-    await addRetellAccount.mutateAsync({ pod_id: podId, ...newRetellAccount });
+    const { google_sheet_url, ...rest } = newRetellAccount;
+    await addRetellAccount.mutateAsync({ 
+      pod_id: podId, 
+      ...rest, 
+      google_sheet_url: google_sheet_url || null 
+    });
     setRetellAccountModalOpen(false);
-    setNewRetellAccount({ label: '', retell_api_key: '', retell_agent_id: '' });
+    setNewRetellAccount({ label: '', retell_api_key: '', retell_agent_id: '', google_sheet_url: '' });
   };
 
   const handleViewAsClient = () => {
@@ -308,12 +316,12 @@ export default function ClientDetail() {
           <div className="grid gap-4 md:grid-cols-3">
             <StatCard
               title="Total Calls"
-              value={callLogs?.length || 0}
+              value={podCallCount?.toLocaleString() || 0}
               icon={Phone}
             />
             <StatCard
               title="Automation Events"
-              value={automationLogs?.length || 0}
+              value={podAutomationCount?.toLocaleString() || 0}
               icon={MessageSquare}
             />
             <StatCard
@@ -477,6 +485,7 @@ export default function ClientDetail() {
                 <TableRow>
                   <TableHead>Label</TableHead>
                   <TableHead>Agent ID</TableHead>
+                  <TableHead>Google Sheet</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Synced</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
@@ -488,6 +497,7 @@ export default function ClientDetail() {
                     <TableRow key={i}>
                       <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                       <TableCell><Skeleton className="h-8 w-16" /></TableCell>
@@ -495,7 +505,7 @@ export default function ClientDetail() {
                   ))
                 ) : retellAccounts?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No Retell agents configured. Click "Add Agent" to get started.
                     </TableCell>
                   </TableRow>
@@ -504,6 +514,20 @@ export default function ClientDetail() {
                     <TableRow key={account.id}>
                       <TableCell className="font-medium">{account.label}</TableCell>
                       <TableCell className="font-mono text-sm">{account.retell_agent_id}</TableCell>
+                      <TableCell>
+                        {account.google_sheet_url ? (
+                          <a 
+                            href={account.google_sheet_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-sm text-accent hover:underline"
+                          >
+                            View Sheet
+                          </a>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={account.is_active ? 'default' : 'secondary'}>
                           {account.is_active ? 'Active' : 'Inactive'}
@@ -767,6 +791,16 @@ export default function ClientDetail() {
                 value={newRetellAccount.retell_agent_id}
                 onChange={(e) => setNewRetellAccount({ ...newRetellAccount, retell_agent_id: e.target.value })}
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Google Sheet URL <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input
+                type="url"
+                placeholder="https://docs.google.com/spreadsheets/d/..."
+                value={newRetellAccount.google_sheet_url}
+                onChange={(e) => setNewRetellAccount({ ...newRetellAccount, google_sheet_url: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">Link a Google Sheet for the client to view call logs</p>
             </div>
           </div>
           <DialogFooter>

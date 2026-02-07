@@ -386,6 +386,7 @@ export type Database = {
       retell_accounts: {
         Row: {
           created_at: string
+          google_sheet_url: string | null
           id: string
           is_active: boolean
           label: string
@@ -396,6 +397,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          google_sheet_url?: string | null
           id?: string
           is_active?: boolean
           label?: string
@@ -406,6 +408,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          google_sheet_url?: string | null
           id?: string
           is_active?: boolean
           label?: string

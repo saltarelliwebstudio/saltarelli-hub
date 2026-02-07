@@ -156,6 +156,7 @@ export default function CallLogs() {
               <TableHead>Direction</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="hidden lg:table-cell">Summary</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -168,12 +169,13 @@ export default function CallLogs() {
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                  <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-40" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-16" /></TableCell>
                 </TableRow>
               ))
             ) : !callLogs || callLogs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={7} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Phone className="h-8 w-8 text-muted-foreground" />
                     <p className="text-muted-foreground">
@@ -218,6 +220,15 @@ export default function CallLogs() {
                     >
                       {call.call_status}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    {call.summary ? (
+                      <p className="text-sm text-muted-foreground line-clamp-2 max-w-[300px]">
+                        {call.summary}
+                      </p>
+                    ) : (
+                      <span className="text-sm text-muted-foreground/50">—</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Button

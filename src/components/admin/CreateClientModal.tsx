@@ -43,6 +43,7 @@ interface RetellAccountInput {
   label: string;
   retell_api_key: string;
   retell_agent_id: string;
+  google_sheet_url: string;
 }
 
 interface CreateClientModalProps {
@@ -71,7 +72,7 @@ export function CreateClientModal({ open, onOpenChange, onSuccess }: CreateClien
   });
 
   const addRetellAccount = () => {
-    setRetellAccounts([...retellAccounts, { label: '', retell_api_key: '', retell_agent_id: '' }]);
+    setRetellAccounts([...retellAccounts, { label: '', retell_api_key: '', retell_agent_id: '', google_sheet_url: '' }]);
   };
 
   const removeRetellAccount = (index: number) => {
@@ -105,9 +106,14 @@ export function CreateClientModal({ open, onOpenChange, onSuccess }: CreateClien
         address: data.address,
         voice_enabled: data.voice_enabled,
         automations_enabled: data.automations_enabled,
-        retell_accounts: retellAccounts.filter(
-          acc => acc.label && acc.retell_api_key && acc.retell_agent_id
-        ),
+        retell_accounts: retellAccounts
+          .filter(acc => acc.label && acc.retell_api_key && acc.retell_agent_id)
+          .map(acc => ({
+            label: acc.label,
+            retell_api_key: acc.retell_api_key,
+            retell_agent_id: acc.retell_agent_id,
+            google_sheet_url: acc.google_sheet_url || null,
+          })),
       });
       form.reset();
       setRetellAccounts([]);
@@ -344,6 +350,16 @@ export function CreateClientModal({ open, onOpenChange, onSuccess }: CreateClien
                               placeholder="agent_..."
                               value={account.retell_agent_id}
                               onChange={(e) => updateRetellAccount(index, 'retell_agent_id', e.target.value)}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Google Sheet URL <span className="text-muted-foreground text-xs">(optional)</span></label>
+                            <Input
+                              type="url"
+                              placeholder="https://docs.google.com/spreadsheets/d/..."
+                              value={account.google_sheet_url}
+                              onChange={(e) => updateRetellAccount(index, 'google_sheet_url', e.target.value)}
                               className="mt-1"
                             />
                           </div>

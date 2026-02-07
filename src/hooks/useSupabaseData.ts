@@ -16,6 +16,7 @@ export type RetellAccount = {
   is_active: boolean;
   last_synced_at: string | null;
   created_at: string;
+  google_sheet_url: string | null;
 };
 export type AdminNote = Tables<'admin_notes'>;
 export type Profile = Tables<'profiles'>;
@@ -355,6 +356,23 @@ export function useAdminNotes(podId: string | undefined) {
   });
 }
 
+// Server-side count for a pod's table (accurate, no row limit)
+export function usePodCount(podId: string | undefined, table: 'call_logs' | 'automation_logs') {
+  return useQuery({
+    queryKey: ['pod-count', podId, table],
+    queryFn: async () => {
+      if (!podId) return 0;
+      const { count, error } = await supabase
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq('pod_id', podId);
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!podId,
+  });
+}
+
 // Dashboard stats
 export function useAdminStats() {
   return useQuery({
@@ -452,6 +470,7 @@ export function useCreateClient() {
         label: string;
         retell_api_key: string;
         retell_agent_id: string;
+        google_sheet_url?: string | null;
       }>;
     }) => {
       const { data: result, error } = await supabase.functions.invoke('create-client', {
@@ -735,6 +754,7 @@ export function useAddRetellAccount() {
       label: string;
       retell_api_key: string;
       retell_agent_id: string;
+      google_sheet_url?: string | null;
     }) => {
       const { data: result, error } = await supabase
         .from('retell_accounts')
