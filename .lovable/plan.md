@@ -1,47 +1,39 @@
 
 
-## Privacy Policy Page
+## Automatic Call Log Sync (Every 5 Minutes)
 
 ### What This Does
 
-Creates a privacy policy page for Saltarelli Web Studio that clearly explains:
-- What data is collected (client account information, voice call recordings, transcripts, and summaries)
-- How data is processed and stored
-- Third-party services involved (Retell AI for call processing, Google Sheets for optional call log sharing)
-- User rights and data protection measures
-- Contact information for privacy inquiries
-
-The policy will be accessible from two places: a link on the login page and from within the dashboard.
+Sets up a scheduled job that automatically syncs call data from Retell AI every 5 minutes. This means new calls will appear in the dashboard within roughly 5 minutes of ending, without anyone needing to click a button.
 
 ---
 
+### How It Works
+
+Right now, call logs only update when an admin manually clicks "Sync Calls" on a client's page. After this change, a background task will run every 5 minutes and pull the latest calls from Retell AI for all active accounts automatically.
+
 ### Technical Details
 
-**New File: `src/pages/PrivacyPolicy.tsx`**
-- A standalone public page (no login required) at `/privacy`
-- Styled to match the existing dark navy design system used on the login page
-- Clean, readable typography with proper headings and sections
-- Includes a "Back to Login" link for easy navigation
-- Sections will cover:
-  - Information We Collect (account data, call data)
-  - How We Use Your Information
-  - Third-Party Services (Retell AI, Google Sheets)
-  - Data Storage and Security (hosted on Lovable Cloud infrastructure)
-  - Data Retention
-  - Your Rights (access, correction, deletion requests)
-  - Contact Information (placeholder email for you to fill in)
+**Database Migration**
 
-**Modified File: `src/App.tsx`**
-- Add a new public route: `<Route path="/privacy" element={<PrivacyPolicy />} />`
+Enable two required extensions (`pg_cron` for scheduling and `pg_net` for HTTP requests), then create a cron job that calls the `sync-retell-calls` backend function every 5 minutes:
 
-**Modified File: `src/pages/Login.tsx`**
-- Add a "Privacy Policy" link in the footer text at the bottom of the login page (next to the copyright line)
+```text
+Schedule: */5 * * * *  (every 5 minutes)
+Target:   sync-retell-calls function
+Auth:     Uses the project's service key
+```
 
-**Modified File: `src/components/layout/DashboardLayout.tsx`**
-- Add a small footer link to "/privacy" at the bottom of the main content area, so logged-in users can access the policy from within the dashboard
+The cron job sends an HTTP POST request to the sync function, which then queries Retell AI for all active accounts and inserts/updates any new call data.
+
+**Modified File: `supabase/config.toml`**
+- Ensure `sync-retell-calls` has `verify_jwt = false` so the scheduled job can call it without a user session (the function already uses the service role key internally for database operations).
+
+**No frontend changes needed** -- the dashboard already reads from the `call_logs` table, so new calls will appear automatically on next page load or navigation.
 
 ### Notes
-- The privacy policy text will be hardcoded in the component (no database needed)
-- You can edit the text directly in the file after it is created to customize wording, add your contact email, or adjust any section
-- The page is publicly accessible so search engines and users can reach it without logging in
+- The sync processes all active Retell accounts across all clients in a single run
+- Existing calls are updated (transcript, summary, status) if they've changed; new calls are inserted
+- The manual "Sync Calls" button on the admin page will continue to work for immediate on-demand syncs
+- If you ever want to change the interval, this can be adjusted in the cron schedule
 
