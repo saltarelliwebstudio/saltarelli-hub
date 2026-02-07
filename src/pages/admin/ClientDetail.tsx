@@ -14,6 +14,7 @@ import {
   Trash2,
   Loader2,
   MessageSquare,
+  Clock,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { 
@@ -24,6 +25,7 @@ import {
   useRetellAccounts,
   useAdminNotes,
   usePodCount,
+  usePodTotalMinutes,
   useUpdatePod,
   useUpdatePodSettings,
   useResetClientPassword,
@@ -102,6 +104,7 @@ export default function ClientDetail() {
   const { data: adminNotes, isLoading: notesLoading } = useAdminNotes(podId);
   const { data: podCallCount } = usePodCount(podId, 'call_logs');
   const { data: podAutomationCount } = usePodCount(podId, 'automation_logs');
+  const { data: podTotalMinutes } = usePodTotalMinutes(podId);
   
   const updatePod = useUpdatePod();
   const updatePodSettings = useUpdatePodSettings();
@@ -313,11 +316,16 @@ export default function ClientDetail() {
 
         {/* Overview Tab */}
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
             <StatCard
               title="Total Calls"
               value={podCallCount?.toLocaleString() || 0}
               icon={Phone}
+            />
+            <StatCard
+              title="Total Minutes"
+              value={podTotalMinutes?.toLocaleString() || 0}
+              icon={Clock}
             />
             <StatCard
               title="Automation Events"
