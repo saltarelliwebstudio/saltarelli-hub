@@ -373,6 +373,40 @@ export function usePodCount(podId: string | undefined, table: 'call_logs' | 'aut
   });
 }
 
+// Server-side sum of call duration for a pod (in seconds)
+export function usePodTotalMinutes(podId: string | undefined) {
+  return useQuery({
+    queryKey: ['pod-total-minutes', podId],
+    queryFn: async () => {
+      if (!podId) return 0;
+      // Fetch all duration_seconds values; use pagination to handle >1000 calls
+      let total = 0;
+      let offset = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('call_logs')
+          .select('duration_seconds')
+          .eq('pod_id', podId)
+          .range(offset, offset + pageSize - 1);
+        if (error) throw error;
+        if (data) {
+          for (const row of data) {
+            total += row.duration_seconds || 0;
+          }
+          if (data.length < pageSize) hasMore = false;
+          else offset += pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+      return Math.round(total / 60);
+    },
+    enabled: !!podId,
+  });
+}
+
 // Dashboard stats
 export function useAdminStats() {
   return useQuery({
