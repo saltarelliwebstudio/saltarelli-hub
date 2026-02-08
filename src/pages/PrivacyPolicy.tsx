@@ -31,7 +31,7 @@ export default function PrivacyPolicy() {
 
         <div className="prose prose-invert max-w-none space-y-8">
           <p className="text-muted-foreground text-sm">
-            Last updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+            Last updated: February 8, 2026
           </p>
 
           <p className="text-muted-foreground leading-relaxed">
@@ -202,8 +202,14 @@ export default function PrivacyPolicy() {
               <p className="text-white font-medium">Saltarelli Web Studio</p>
               <p className="text-muted-foreground text-sm mt-1">
                 Email:{' '}
-                <a href="mailto:privacy@saltarelliwebstudio.com" className="text-accent hover:underline">
-                  privacy@saltarelliwebstudio.com
+                <a href="mailto:saltarelliwebstudio@gmail.com" className="text-accent hover:underline">
+                  saltarelliwebstudio@gmail.com
+                </a>
+              </p>
+              <p className="text-muted-foreground text-sm mt-1">
+                Phone:{' '}
+                <a href="tel:+12899314142" className="text-accent hover:underline">
+                  289-931-4142
                 </a>
               </p>
             </div>
