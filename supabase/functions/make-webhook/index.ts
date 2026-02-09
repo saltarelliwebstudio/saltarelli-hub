@@ -24,14 +24,24 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { pod_id, name, phone, email, notes } = body;
 
-    if (!pod_id) {
+    // Accept pod_id from URL param or body
+    const podId = url.searchParams.get("pod_id") || body.pod_id;
+    if (!podId) {
       return new Response(
-        JSON.stringify({ error: "pod_id is required" }),
+        JSON.stringify({ error: "pod_id is required (pass as URL param or in body)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Accept field names from Make.com (Name, Email, Phone Number, Service, Best Time)
+    // or standard lowercase (name, email, phone, notes)
+    const name = body.Name || body.name || "Form Submission";
+    const email = body.Email || body.email || null;
+    const phone = body["Phone Number"] || body.phone || null;
+    const service = body.Service || body.service || null;
+    const bestTime = body["Best Time"] || body.best_time || null;
+    const notes = body.notes || [service && `Service: ${service}`, bestTime && `Best Time: ${bestTime}`].filter(Boolean).join(", ") || null;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -43,11 +53,11 @@ Deno.serve(async (req) => {
     const { data: lead, error: leadError } = await supabase
       .from("leads")
       .insert({
-        pod_id,
-        name: name || "Form Submission",
-        phone: phone || null,
-        email: email || null,
-        notes: notes || null,
+        pod_id: podId,
+        name,
+        phone,
+        email,
+        notes,
         source: "web_form",
         status: "new",
       })
@@ -66,10 +76,10 @@ Deno.serve(async (req) => {
     const { error: logError } = await supabase
       .from("automation_logs")
       .insert({
-        pod_id,
+        pod_id: podId,
         module_type: "leads",
         event_type: "form_submission",
-        event_label: `New lead: ${name || "Unknown"}`,
+        event_label: `New lead: ${name}`,
         payload: { lead_id: lead.id, source: "make_webhook", ...body },
         status: "success",
       });
