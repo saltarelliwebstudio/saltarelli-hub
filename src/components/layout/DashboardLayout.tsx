@@ -21,6 +21,11 @@ import {
   Users,
   Phone,
   Zap,
+  ContactRound,
+  LifeBuoy,
+  CreditCard,
+  BarChart3,
+  Plug,
   Settings,
   UserPlus,
   LogOut,
@@ -43,6 +48,8 @@ interface NavItem {
 const adminNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Clients', href: '/admin/clients', icon: Users },
+  { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+  { label: 'Integrations', href: '/admin/integrations', icon: Plug },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
@@ -50,7 +57,10 @@ const clientNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Call Logs', href: '/dashboard/calls', icon: Phone, requiresModule: 'voice' },
   { label: 'Automations', href: '/dashboard/automations', icon: Zap, requiresModule: 'automations' },
+  { label: 'Leads', href: '/dashboard/leads', icon: ContactRound },
   { label: 'Team', href: '/dashboard/team', icon: UserPlus },
+  { label: 'Support', href: '/dashboard/support', icon: LifeBuoy },
+  { label: 'Billing', href: '/dashboard/billing', icon: CreditCard, requiresModule: 'billing' },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
@@ -80,6 +90,9 @@ export default function DashboardLayout() {
       }
       if (item.requiresModule === 'automations') {
         return myPod.pod_settings.automations_enabled;
+      }
+      if (item.requiresModule === 'billing') {
+        return myPod.pod_settings.billing_enabled;
       }
       return true;
     });

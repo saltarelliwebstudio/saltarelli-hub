@@ -485,6 +485,340 @@ export function useClientStats(podId: string | undefined) {
   });
 }
 
+// Fetch leads for a pod
+export function useLeads(podId: string | undefined, options?: {
+  status?: string;
+  limit?: number;
+}) {
+  return useQuery({
+    queryKey: ['leads', podId, options],
+    queryFn: async () => {
+      if (!podId) return [];
+
+      let query = supabase
+        .from('leads')
+        .select('*')
+        .eq('pod_id', podId)
+        .order('created_at', { ascending: false });
+
+      if (options?.status && options.status !== 'all') {
+        query = query.eq('status', options.status);
+      }
+
+      if (options?.limit) {
+        query = query.limit(options.limit);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!podId,
+  });
+}
+
+// Create lead mutation
+export function useCreateLead() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: {
+      pod_id: string;
+      name: string;
+      phone?: string;
+      email?: string;
+      source?: string;
+      notes?: string;
+      call_log_id?: string;
+    }) => {
+      const { data: result, error } = await supabase
+        .from('leads')
+        .insert(data)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, { pod_id }) => {
+      queryClient.invalidateQueries({ queryKey: ['leads', pod_id] });
+      toast({
+        title: 'Lead added',
+        description: 'The lead has been created successfully.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to add lead',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Update lead mutation
+export function useUpdateLead() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, podId, updates }: { id: string; podId: string; updates: Record<string, any> }) => {
+      const { data, error } = await supabase
+        .from('leads')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { ...data, podId };
+    },
+    onSuccess: ({ podId }) => {
+      queryClient.invalidateQueries({ queryKey: ['leads', podId] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update lead',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Delete lead mutation
+export function useDeleteLead() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, podId }: { id: string; podId: string }) => {
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return { podId };
+    },
+    onSuccess: ({ podId }) => {
+      queryClient.invalidateQueries({ queryKey: ['leads', podId] });
+      toast({
+        title: 'Lead deleted',
+        description: 'The lead has been removed.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to delete lead',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Fetch support requests for a pod (or all for admin)
+export function useSupportRequests(podId?: string) {
+  return useQuery({
+    queryKey: ['support-requests', podId],
+    queryFn: async () => {
+      let query = supabase
+        .from('support_requests')
+        .select('*, pods(name, company_name)')
+        .order('created_at', { ascending: false });
+
+      if (podId) {
+        query = query.eq('pod_id', podId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+// Create support request mutation
+export function useCreateSupportRequest() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { pod_id: string; user_id: string; subject: string; message: string }) => {
+      const { data: result, error } = await supabase
+        .from('support_requests')
+        .insert(data)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, { pod_id }) => {
+      queryClient.invalidateQueries({ queryKey: ['support-requests', pod_id] });
+      queryClient.invalidateQueries({ queryKey: ['support-requests'] });
+      toast({
+        title: 'Request submitted',
+        description: 'We\'ll get back to you as soon as possible.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to submit request',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Fetch pod members with profiles
+export function usePodMembers(podId: string | undefined) {
+  return useQuery({
+    queryKey: ['pod-members', podId],
+    queryFn: async () => {
+      if (!podId) return [];
+
+      const { data, error } = await supabase
+        .from('pod_members')
+        .select('*, profiles:user_id(full_name, email)')
+        .eq('pod_id', podId)
+        .order('role', { ascending: true })
+        .order('invited_at', { ascending: true });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!podId,
+  });
+}
+
+// Invite team member mutation
+export function useInviteTeamMember() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ podId, email, fullName }: { podId: string; email: string; fullName?: string }) => {
+      const { data: result, error } = await supabase.functions.invoke('invite-team-member', {
+        body: { pod_id: podId, email, full_name: fullName },
+      });
+
+      if (error) throw error;
+      if (result.error) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: (_, { podId }) => {
+      queryClient.invalidateQueries({ queryKey: ['pod-members', podId] });
+      toast({
+        title: 'Member invited',
+        description: 'The team member has been added to your workspace.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to invite member',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Remove team member mutation
+export function useRemoveTeamMember() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ memberId, podId }: { memberId: string; podId: string }) => {
+      const { error } = await supabase
+        .from('pod_members')
+        .delete()
+        .eq('id', memberId);
+
+      if (error) throw error;
+      return { podId };
+    },
+    onSuccess: ({ podId }) => {
+      queryClient.invalidateQueries({ queryKey: ['pod-members', podId] });
+      toast({
+        title: 'Member removed',
+        description: 'The team member has been removed from your workspace.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to remove member',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Update own profile mutation
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ userId, full_name }: { userId: string; full_name: string }) => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ full_name })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (_, { userId }) => {
+      queryClient.invalidateQueries({ queryKey: ['profile', userId] });
+      toast({
+        title: 'Profile updated',
+        description: 'Your profile has been saved.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update profile',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Update own password mutation
+export function useUpdatePassword() {
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ newPassword }: { newPassword: string }) => {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Password updated',
+        description: 'Your password has been changed successfully.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update password',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
 // Create client mutation
 export function useCreateClient() {
   const queryClient = useQueryClient();

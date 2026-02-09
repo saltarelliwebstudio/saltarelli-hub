@@ -11,12 +11,15 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import Login from "@/pages/Login";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import NotFound from "@/pages/NotFound";
+import ResetPassword from "@/pages/ResetPassword";
 
 // Admin Pages
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import ClientsList from "@/pages/admin/ClientsList";
 import ClientDetail from "@/pages/admin/ClientDetail";
 import ViewAsClient from "@/pages/admin/ViewAsClient";
+import AdminAnalytics from "@/pages/admin/AdminAnalytics";
+import IntegrationSettings from "@/pages/admin/IntegrationSettings";
 import AdminSettings from "@/pages/admin/AdminSettings";
 
 // Client Pages
@@ -24,6 +27,9 @@ import ClientDashboard from "@/pages/dashboard/ClientDashboard";
 import CallLogs from "@/pages/dashboard/CallLogs";
 import Automations from "@/pages/dashboard/Automations";
 import Team from "@/pages/dashboard/Team";
+import Leads from "@/pages/dashboard/Leads";
+import Support from "@/pages/dashboard/Support";
+import Billing from "@/pages/dashboard/Billing";
 import ClientSettings from "@/pages/dashboard/ClientSettings";
 
 const queryClient = new QueryClient();
@@ -39,6 +45,7 @@ const App = () => (
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
 
             {/* Admin routes */}
@@ -52,6 +59,8 @@ const App = () => (
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/clients" element={<ClientsList />} />
               <Route path="/admin/clients/:podId" element={<ClientDetail />} />
+              <Route path="/admin/analytics" element={<AdminAnalytics />} />
+              <Route path="/admin/integrations" element={<IntegrationSettings />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
             </Route>
 
@@ -67,6 +76,7 @@ const App = () => (
               <Route index element={<ClientDashboard />} />
               <Route path="calls" element={<CallLogs />} />
               <Route path="automations" element={<Automations />} />
+              <Route path="leads" element={<Leads />} />
               <Route path="settings" element={<ClientSettings />} />
             </Route>
 
@@ -81,7 +91,10 @@ const App = () => (
               <Route path="/dashboard" element={<ClientDashboard />} />
               <Route path="/dashboard/calls" element={<CallLogs />} />
               <Route path="/dashboard/automations" element={<Automations />} />
+              <Route path="/dashboard/leads" element={<Leads />} />
               <Route path="/dashboard/team" element={<Team />} />
+              <Route path="/dashboard/support" element={<Support />} />
+              <Route path="/dashboard/billing" element={<Billing />} />
               <Route path="/dashboard/settings" element={<ClientSettings />} />
             </Route>
 
