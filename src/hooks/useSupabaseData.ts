@@ -343,14 +343,28 @@ export function useAdminNotes(podId: string | undefined) {
     queryFn: async () => {
       if (!podId) return [];
 
-      const { data, error } = await supabase
+      const { data: notes, error } = await supabase
         .from('admin_notes')
-        .select('*, profiles:author_id(full_name, email)')
+        .select('*')
         .eq('pod_id', podId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data;
+      if (!notes || notes.length === 0) return [];
+
+      // Fetch author profiles separately since author_id FK targets auth.users, not profiles
+      const authorIds = [...new Set(notes.map(n => n.author_id))];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', authorIds);
+
+      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
+      return notes.map(note => ({
+        ...note,
+        profiles: profileMap.get(note.author_id) || null,
+      }));
     },
     enabled: !!podId,
   });
@@ -412,16 +426,18 @@ export function useAdminStats() {
   return useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
-      const [podsResult, callsResult, automationsResult] = await Promise.all([
+      const [podsResult, callsResult, automationsResult, retellResult] = await Promise.all([
         supabase.from('pods').select('id', { count: 'exact', head: true }),
         supabase.from('call_logs').select('id', { count: 'exact', head: true }),
         supabase.from('automation_logs').select('id', { count: 'exact', head: true }),
+        supabase.from('retell_accounts').select('id', { count: 'exact', head: true }),
       ]);
 
       return {
         totalClients: podsResult.count || 0,
         totalCalls: callsResult.count || 0,
         totalAutomations: automationsResult.count || 0,
+        totalRetellAgents: retellResult.count || 0,
       };
     },
   });

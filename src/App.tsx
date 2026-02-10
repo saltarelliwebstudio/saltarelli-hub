@@ -26,7 +26,6 @@ import AdminSettings from "@/pages/admin/AdminSettings";
 import ClientDashboard from "@/pages/dashboard/ClientDashboard";
 import CallLogs from "@/pages/dashboard/CallLogs";
 import Automations from "@/pages/dashboard/Automations";
-import Team from "@/pages/dashboard/Team";
 import Leads from "@/pages/dashboard/Leads";
 import Support from "@/pages/dashboard/Support";
 import Billing from "@/pages/dashboard/Billing";
@@ -92,7 +91,6 @@ const App = () => (
               <Route path="/dashboard/calls" element={<CallLogs />} />
               <Route path="/dashboard/automations" element={<Automations />} />
               <Route path="/dashboard/leads" element={<Leads />} />
-              <Route path="/dashboard/team" element={<Team />} />
               <Route path="/dashboard/support" element={<Support />} />
               <Route path="/dashboard/billing" element={<Billing />} />
               <Route path="/dashboard/settings" element={<ClientSettings />} />

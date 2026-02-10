@@ -1,4 +1,4 @@
-import { Users, Phone, Zap } from 'lucide-react';
+import { Users, Phone, Zap, Bot } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { ActivityFeed, ActivityItem } from '@/components/ui/activity-feed';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,9 +50,10 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statsLoading ? (
           <>
+            <Skeleton className="h-[120px] rounded-xl" />
             <Skeleton className="h-[120px] rounded-xl" />
             <Skeleton className="h-[120px] rounded-xl" />
             <Skeleton className="h-[120px] rounded-xl" />
@@ -73,6 +74,11 @@ export default function AdminDashboard() {
               title="Automation Events"
               value={(stats?.totalAutomations || 0).toLocaleString()}
               icon={Zap}
+            />
+            <StatCard
+              title="Retell Agents"
+              value={stats?.totalRetellAgents || 0}
+              icon={Bot}
             />
           </>
         )}
