@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
-import { BarChart3, Phone, Zap, ContactRound, Users, TrendingUp } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { BarChart3, Phone, Zap, ContactRound, Users, TrendingUp, Search, Calendar } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import {
   Table,
   TableBody,
@@ -12,100 +13,73 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useAdminStats, usePods, useAllCallLogs, useAllAutomationLogs } from '@/hooks/useSupabaseData';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { MonthPicker } from '@/components/ui/month-picker';
+import {
+  useAdminStats,
+  useCallVolumeStats,
+  useAdminStatsForMonth,
+  useAllLeadStatsForMonth,
+  useSupportStatsForMonth,
+  usePerPodStatsForMonth,
+  useAllCallLogsForMonth,
+  useMonthlyHistorySummaries,
+} from '@/hooks/useSupabaseData';
+import { cn } from '@/lib/utils';
 
-// Fetch aggregated lead counts
-function useAllLeadStats() {
-  return useQuery({
-    queryKey: ['all-lead-stats'],
-    queryFn: async () => {
-      const [totalResult, newResult, qualifiedResult] = await Promise.all([
-        supabase.from('leads').select('id', { count: 'exact', head: true }),
-        supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new'),
-        supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'qualified'),
-      ]);
-      return {
-        total: totalResult.count || 0,
-        new: newResult.count || 0,
-        qualified: qualifiedResult.count || 0,
-      };
-    },
-  });
-}
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
-// Fetch per-pod call/automation counts
-function usePerPodStats() {
-  return useQuery({
-    queryKey: ['per-pod-stats'],
-    queryFn: async () => {
-      const { data: pods, error: podsError } = await supabase
-        .from('pods')
-        .select('id, name, company_name')
-        .order('created_at', { ascending: false });
-
-      if (podsError) throw podsError;
-      if (!pods) return [];
-
-      const stats = await Promise.all(
-        pods.map(async (pod) => {
-          const [callsResult, automationsResult, leadsResult] = await Promise.all([
-            supabase.from('call_logs').select('id', { count: 'exact', head: true }).eq('pod_id', pod.id),
-            supabase.from('automation_logs').select('id', { count: 'exact', head: true }).eq('pod_id', pod.id),
-            supabase.from('leads').select('id', { count: 'exact', head: true }).eq('pod_id', pod.id),
-          ]);
-          return {
-            podId: pod.id,
-            name: pod.company_name || pod.name,
-            calls: callsResult.count || 0,
-            automations: automationsResult.count || 0,
-            leads: leadsResult.count || 0,
-          };
-        })
-      );
-
-      return stats.sort((a, b) => b.calls - a.calls);
-    },
-  });
-}
-
-// Fetch support request counts
-function useSupportStats() {
-  return useQuery({
-    queryKey: ['support-stats'],
-    queryFn: async () => {
-      const [totalResult, openResult] = await Promise.all([
-        supabase.from('support_requests').select('id', { count: 'exact', head: true }),
-        supabase.from('support_requests').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-      ]);
-      return {
-        total: totalResult.count || 0,
-        open: openResult.count || 0,
-      };
-    },
-  });
-}
+const SHORT_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
 
 export default function AdminAnalytics() {
+  const now = new Date();
+  const [selectedMonth, setSelectedMonth] = useState({ month: now.getMonth(), year: now.getFullYear() });
+  const [historySearch, setHistorySearch] = useState('');
+
+  // All-time stats (for total clients count)
   const { data: stats, isLoading: statsLoading } = useAdminStats();
-  const { data: leadStats, isLoading: leadsLoading } = useAllLeadStats();
-  const { data: podStats, isLoading: podStatsLoading } = usePerPodStats();
-  const { data: supportStats, isLoading: supportLoading } = useSupportStats();
-  const { data: recentCalls } = useAllCallLogs({ limit: 100 });
 
-  // Call status breakdown
+  // Call volume stats (pinned to current period)
+  const { data: volumeStats, isLoading: volumeLoading } = useCallVolumeStats();
+
+  // Monthly-scoped stats
+  const { data: monthStats, isLoading: monthStatsLoading } = useAdminStatsForMonth(selectedMonth.month, selectedMonth.year);
+  const { data: monthLeadStats, isLoading: monthLeadsLoading } = useAllLeadStatsForMonth(selectedMonth.month, selectedMonth.year);
+  const { data: monthSupportStats, isLoading: monthSupportLoading } = useSupportStatsForMonth(selectedMonth.month, selectedMonth.year);
+  const { data: monthPodStats, isLoading: monthPodStatsLoading } = usePerPodStatsForMonth(selectedMonth.month, selectedMonth.year);
+  const { data: monthCallLogs } = useAllCallLogsForMonth(selectedMonth.month, selectedMonth.year);
+
+  // Monthly history
+  const { data: historySummaries, isLoading: historyLoading } = useMonthlyHistorySummaries();
+
+  // Call status breakdown for selected month
   const callBreakdown = useMemo(() => {
-    if (!recentCalls) return { completed: 0, missed: 0, failed: 0, voicemail: 0 };
+    if (!monthCallLogs) return { completed: 0, missed: 0, failed: 0, voicemail: 0 };
     return {
-      completed: recentCalls.filter((c: any) => c.call_status === 'completed').length,
-      missed: recentCalls.filter((c: any) => c.call_status === 'missed').length,
-      failed: recentCalls.filter((c: any) => c.call_status === 'failed').length,
-      voicemail: recentCalls.filter((c: any) => c.call_status === 'voicemail').length,
+      completed: monthCallLogs.filter((c: any) => c.call_status === 'completed').length,
+      missed: monthCallLogs.filter((c: any) => c.call_status === 'missed').length,
+      failed: monthCallLogs.filter((c: any) => c.call_status === 'failed').length,
+      voicemail: monthCallLogs.filter((c: any) => c.call_status === 'voicemail').length,
     };
-  }, [recentCalls]);
+  }, [monthCallLogs]);
 
-  const isLoading = statsLoading || leadsLoading || supportLoading;
+  // Filter history summaries by search
+  const filteredHistory = useMemo(() => {
+    if (!historySummaries) return [];
+    if (!historySearch.trim()) return historySummaries;
+    const q = historySearch.toLowerCase();
+    return historySummaries.filter(s =>
+      MONTH_NAMES[s.month].toLowerCase().includes(q) ||
+      s.year.toString().includes(q)
+    );
+  }, [historySummaries, historySearch]);
+
+  const isMonthLoading = monthStatsLoading || monthLeadsLoading || monthSupportLoading;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -115,9 +89,50 @@ export default function AdminAnalytics() {
         <p className="text-muted-foreground">Aggregated stats across all clients</p>
       </div>
 
-      {/* Top-level stats */}
+      {/* Call Volume Stats - pinned to current period */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {volumeLoading ? (
+          <>
+            <Skeleton className="h-[120px] rounded-xl" />
+            <Skeleton className="h-[120px] rounded-xl" />
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="Calls This Week"
+              value={volumeStats?.thisWeek || 0}
+              icon={Phone}
+              variant="accent"
+              trend={volumeStats ? {
+                value: Math.abs(volumeStats.weekTrend),
+                isPositive: volumeStats.weekTrend >= 0,
+              } : undefined}
+            />
+            <StatCard
+              title="Calls This Month"
+              value={volumeStats?.thisMonth || 0}
+              icon={TrendingUp}
+              variant="accent"
+              trend={volumeStats ? {
+                value: Math.abs(volumeStats.monthTrend),
+                isPositive: volumeStats.monthTrend >= 0,
+              } : undefined}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Month Picker */}
+      <div className="flex items-center gap-3">
+        <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
+        <span className="text-sm text-muted-foreground">
+          Showing stats for {MONTH_NAMES[selectedMonth.month]} {selectedMonth.year}
+        </span>
+      </div>
+
+      {/* Monthly stat cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {isLoading ? (
+        {(isMonthLoading || statsLoading) ? (
           <>
             {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[120px] rounded-xl" />)}
           </>
@@ -129,20 +144,20 @@ export default function AdminAnalytics() {
               icon={Users}
             />
             <StatCard
-              title="Total Calls"
-              value={(stats?.totalCalls || 0).toLocaleString()}
+              title="Calls"
+              value={(monthStats?.totalCalls || 0).toLocaleString()}
               icon={Phone}
               variant="accent"
             />
             <StatCard
-              title="Total Leads"
-              value={(leadStats?.total || 0).toLocaleString()}
+              title="Leads"
+              value={(monthLeadStats?.total || 0).toLocaleString()}
               icon={ContactRound}
               variant="success"
             />
             <StatCard
-              title="Automations Run"
-              value={(stats?.totalAutomations || 0).toLocaleString()}
+              title="Automations"
+              value={(monthStats?.totalAutomations || 0).toLocaleString()}
               icon={Zap}
               variant="warning"
             />
@@ -157,7 +172,7 @@ export default function AdminAnalytics() {
             <CardTitle className="text-sm font-medium text-muted-foreground">New Leads</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{leadStats?.new || 0}</div>
+            <div className="text-2xl font-bold">{monthLeadStats?.new || 0}</div>
             <p className="text-xs text-muted-foreground">Awaiting contact</p>
           </CardContent>
         </Card>
@@ -166,17 +181,17 @@ export default function AdminAnalytics() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Qualified Leads</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-500">{leadStats?.qualified || 0}</div>
+            <div className="text-2xl font-bold text-green-500">{monthLeadStats?.qualified || 0}</div>
             <p className="text-xs text-muted-foreground">Ready to close</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Open Support Requests</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Support Requests</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-500">{supportStats?.open || 0}</div>
-            <p className="text-xs text-muted-foreground">of {supportStats?.total || 0} total</p>
+            <div className="text-2xl font-bold text-yellow-500">{monthSupportStats?.open || 0}</div>
+            <p className="text-xs text-muted-foreground">open of {monthSupportStats?.total || 0} total</p>
           </CardContent>
         </Card>
       </div>
@@ -188,7 +203,7 @@ export default function AdminAnalytics() {
             <Phone className="h-5 w-5 text-accent" />
             Call Status Breakdown
           </CardTitle>
-          <CardDescription>Last 100 calls across all clients</CardDescription>
+          <CardDescription>{MONTH_NAMES[selectedMonth.month]} {selectedMonth.year}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -219,14 +234,14 @@ export default function AdminAnalytics() {
             <BarChart3 className="h-5 w-5 text-accent" />
             Per-Client Breakdown
           </CardTitle>
-          <CardDescription>Activity by client</CardDescription>
+          <CardDescription>{MONTH_NAMES[selectedMonth.month]} {selectedMonth.year}</CardDescription>
         </CardHeader>
         <CardContent>
-          {podStatsLoading ? (
+          {monthPodStatsLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
-          ) : !podStats || podStats.length === 0 ? (
+          ) : !monthPodStats || monthPodStats.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No clients yet.</p>
           ) : (
             <Table>
@@ -239,7 +254,7 @@ export default function AdminAnalytics() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {podStats.map((pod) => (
+                {monthPodStats.map((pod) => (
                   <TableRow key={pod.podId}>
                     <TableCell className="font-medium">{pod.name}</TableCell>
                     <TableCell className="text-right">{pod.calls.toLocaleString()}</TableCell>
@@ -249,6 +264,67 @@ export default function AdminAnalytics() {
                 ))}
               </TableBody>
             </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Monthly History Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-accent" />
+                Monthly History
+              </CardTitle>
+              <CardDescription>Click a month to view its stats</CardDescription>
+            </div>
+            <div className="relative w-48">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search months..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {historyLoading ? (
+            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-24 rounded-lg" />)}
+            </div>
+          ) : filteredHistory.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground">No matching months found.</p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+              {filteredHistory.map((s) => {
+                const isSelected = s.month === selectedMonth.month && s.year === selectedMonth.year;
+                const hasData = s.calls > 0 || s.automations > 0 || s.leads > 0;
+
+                return (
+                  <button
+                    key={`${s.year}-${s.month}`}
+                    onClick={() => setSelectedMonth({ month: s.month, year: s.year })}
+                    className={cn(
+                      'rounded-lg border p-4 text-left transition-all hover:shadow-md',
+                      isSelected
+                        ? 'border-accent bg-accent/5 ring-1 ring-accent/30'
+                        : 'border-border hover:border-accent/30',
+                      !hasData && 'opacity-60',
+                    )}
+                  >
+                    <p className="font-medium text-sm">{SHORT_MONTHS[s.month]} {s.year}</p>
+                    <div className="mt-2 flex gap-3 text-xs text-muted-foreground">
+                      <span>{s.calls} calls</span>
+                      <span>{s.automations} auto</span>
+                      <span>{s.leads} leads</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>

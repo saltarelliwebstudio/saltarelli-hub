@@ -1,14 +1,11 @@
-import { useState } from 'react';
-import { LifeBuoy, Send, Clock, CheckCircle, Loader2, MessageSquare } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
+import { Clock, CheckCircle, Loader2, MessageSquare, Mail, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMyPod, useSupportRequests, useCreateSupportRequest } from '@/hooks/useSupabaseData';
+import { useMyPod, useSupportRequests, useAdminUserId } from '@/hooks/useSupabaseData';
+import { ChatWidget } from '@/components/chat/ChatWidget';
+import { DirectMessageChat } from '@/components/chat/DirectMessageChat';
 import { format } from 'date-fns';
 
 const STATUS_STYLES: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
@@ -21,32 +18,9 @@ export default function Support() {
   const { userWithRole } = useAuth();
   const { data: pod, isLoading: podLoading } = useMyPod();
   const { data: requests, isLoading: requestsLoading } = useSupportRequests(pod?.id);
-  const createRequest = useCreateSupportRequest();
-
-  const [subject, setSubject] = useState('');
-  const [message, setMessage] = useState('');
+  const { data: adminUserId } = useAdminUserId();
 
   const isLoading = podLoading || requestsLoading;
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pod || !userWithRole) return;
-
-    createRequest.mutate(
-      {
-        pod_id: pod.id,
-        user_id: userWithRole.id,
-        subject,
-        message,
-      },
-      {
-        onSuccess: () => {
-          setSubject('');
-          setMessage('');
-        },
-      }
-    );
-  };
 
   if (isLoading) {
     return (
@@ -55,10 +29,7 @@ export default function Support() {
           <Skeleton className="h-9 w-48 mb-2" />
           <Skeleton className="h-5 w-72" />
         </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
-        </div>
+        <Skeleton className="h-[400px]" />
       </div>
     );
   }
@@ -68,77 +39,54 @@ export default function Support() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Support</h1>
-        <p className="text-muted-foreground">Get help or submit a request</p>
+        <p className="text-muted-foreground">Chat with our AI assistant or reach out directly</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Submit Request Form */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Send className="h-5 w-5 text-accent" />
-              <CardTitle>Submit a Request</CardTitle>
-            </div>
-            <CardDescription>
-              Describe what you need help with and we'll get back to you.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="subject">Subject</Label>
-                <Input
-                  id="subject"
-                  placeholder="Brief description of your request"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="message">Message</Label>
-                <Textarea
-                  id="message"
-                  placeholder="Tell us more about what you need..."
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  rows={5}
-                  required
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full gradient-orange text-white shadow-glow-orange"
-                disabled={createRequest.isPending}
-              >
-                {createRequest.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-                Submit Request
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+      {/* AI Chat Widget */}
+      {userWithRole && (
+        <ChatWidget
+          userId={userWithRole.id}
+          podId={pod?.id}
+          className="min-h-[500px]"
+        />
+      )}
 
-        {/* Contact Info */}
-        <Card className="h-fit">
-          <CardHeader>
+      {/* Direct Message Chat with Adam */}
+      {userWithRole && pod?.id && adminUserId && (
+        <DirectMessageChat
+          currentUserId={userWithRole.id}
+          otherUserId={adminUserId}
+          podId={pod.id}
+          otherUserName="Adam"
+          className="min-h-[400px]"
+        />
+      )}
+
+      {/* Direct Contact Info */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Need to talk to a human?</CardTitle>
+          <CardDescription>
+            If the AI assistant can't help, reach out to Adam directly.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-6">
             <div className="flex items-center gap-2">
-              <LifeBuoy className="h-5 w-5 text-accent" />
-              <CardTitle>Contact Us</CardTitle>
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <a href="mailto:saltarelliwebstudio@gmail.com" className="text-sm text-accent hover:underline">
+                saltarelliwebstudio@gmail.com
+              </a>
             </div>
-            <CardDescription>Other ways to reach Saltarelli Web Studio</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="p-4 rounded-lg bg-muted/50">
-              <p className="text-sm font-medium">Email</p>
-              <p className="text-sm text-muted-foreground">support@saltarelliwebstudio.com</p>
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              <a href="tel:+12899314142" className="text-sm text-accent hover:underline">
+                289-931-4142
+              </a>
             </div>
-            <div className="p-4 rounded-lg bg-muted/50">
-              <p className="text-sm font-medium">Response Time</p>
-              <p className="text-sm text-muted-foreground">We typically respond within 24 hours on business days.</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Previous Requests */}
       {requests && requests.length > 0 && (

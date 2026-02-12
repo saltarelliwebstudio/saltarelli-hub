@@ -21,6 +21,9 @@ interface CreateClientRequest {
   address?: string;
   voice_enabled?: boolean;
   automations_enabled?: boolean;
+  website_enabled?: boolean;
+  website_url?: string;
+  google_sheet_url?: string;
   retell_accounts?: RetellAccount[];
 }
 
@@ -39,6 +42,9 @@ Deno.serve(async (req) => {
       address,
       voice_enabled = false,
       automations_enabled = false,
+      website_enabled = false,
+      website_url,
+      google_sheet_url,
       retell_accounts = [],
     }: CreateClientRequest = await req.json();
 
@@ -136,6 +142,9 @@ Deno.serve(async (req) => {
         voice_enabled,
         automations_enabled,
         billing_enabled: false,
+        website_enabled,
+        website_url: website_url || null,
+        google_sheet_url: google_sheet_url || null,
       })
       .eq("pod_id", pod.id);
 

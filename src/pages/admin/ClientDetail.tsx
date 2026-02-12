@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -15,13 +15,15 @@ import {
   Loader2,
   MessageSquare,
   Clock,
+  BarChart3,
+  Globe,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { 
-  usePod, 
+import {
+  usePod,
   useProfile,
-  useCallLogs, 
-  useAutomationLogs, 
+  useCallLogs,
+  useAutomationLogs,
   useRetellAccounts,
   useAdminNotes,
   usePodCount,
@@ -35,6 +37,9 @@ import {
   useAddRetellAccount,
   useUpdateRetellAccount,
   useDeleteRetellAccount,
+  useAnalyticsConfig,
+  useCreateAnalyticsConfig,
+  useSyncAnalytics,
 } from '@/hooks/useSupabaseData';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -115,6 +120,9 @@ export default function ClientDetail() {
   const addRetellAccount = useAddRetellAccount();
   const updateRetellAccount = useUpdateRetellAccount();
   const deleteRetellAccount = useDeleteRetellAccount();
+  const { data: analyticsConfigs } = useAnalyticsConfig(pod?.owner_id);
+  const createAnalyticsConfig = useCreateAnalyticsConfig();
+  const syncAnalytics = useSyncAnalytics();
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [resetPasswordModalOpen, setResetPasswordModalOpen] = useState(false);
@@ -123,6 +131,19 @@ export default function ClientDetail() {
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const [retellAccountModalOpen, setRetellAccountModalOpen] = useState(false);
   const [newRetellAccount, setNewRetellAccount] = useState({ label: '', retell_api_key: '', retell_agent_id: '', google_sheet_url: '' });
+  const [newAnalyticsSource, setNewAnalyticsSource] = useState('manual');
+  const [websiteUrl, setWebsiteUrl] = useState(pod?.pod_settings?.website_url || '');
+  const [googleSheetUrl, setGoogleSheetUrl] = useState(pod?.pod_settings?.google_sheet_url || '');
+
+  // Sync website URL and google sheet state when pod data loads
+  useEffect(() => {
+    if (pod?.pod_settings?.website_url !== undefined) {
+      setWebsiteUrl(pod.pod_settings.website_url || '');
+    }
+    if (pod?.pod_settings?.google_sheet_url !== undefined) {
+      setGoogleSheetUrl(pod.pod_settings.google_sheet_url || '');
+    }
+  }, [pod?.pod_settings?.website_url, pod?.pod_settings?.google_sheet_url]);
 
   const [editForm, setEditForm] = useState({
     name: '',
@@ -168,9 +189,20 @@ export default function ClientDetail() {
     setNewPassword('');
   };
 
-  const handleToggleModule = async (module: 'voice_enabled' | 'automations_enabled', value: boolean) => {
+  const handleToggleModule = async (module: 'voice_enabled' | 'automations_enabled' | 'analytics_enabled' | 'website_enabled', value: boolean) => {
     if (!podId) return;
     await updatePodSettings.mutateAsync({ podId, updates: { [module]: value } });
+  };
+
+  const handleSaveWebsiteSettings = async () => {
+    if (!podId) return;
+    await updatePodSettings.mutateAsync({
+      podId,
+      updates: {
+        website_url: websiteUrl || null,
+        google_sheet_url: googleSheetUrl || null,
+      }
+    });
   };
 
   const handleAddNote = async () => {
@@ -675,6 +707,149 @@ export default function ClientDetail() {
                   onCheckedChange={(checked) => handleToggleModule('automations_enabled', checked)}
                   disabled={updatePodSettings.isPending}
                 />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Analytics</p>
+                  <p className="text-sm text-muted-foreground">Enable client-facing analytics dashboard</p>
+                </div>
+                <Switch
+                  checked={pod.pod_settings?.analytics_enabled || false}
+                  onCheckedChange={(checked) => handleToggleModule('analytics_enabled', checked)}
+                  disabled={updatePodSettings.isPending}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Website</p>
+                  <p className="text-sm text-muted-foreground">Show a link to the client's website in their sidebar</p>
+                </div>
+                <Switch
+                  checked={pod.pod_settings?.website_enabled || false}
+                  onCheckedChange={(checked) => handleToggleModule('website_enabled', checked)}
+                  disabled={updatePodSettings.isPending}
+                />
+              </div>
+
+              {pod.pod_settings?.website_enabled && (
+                <div className="pl-1 space-y-4 border-l-2 border-accent/30 ml-1">
+                  <div className="space-y-2 ml-3">
+                    <Label>Website URL</Label>
+                    <Input
+                      type="url"
+                      placeholder="https://example.com"
+                      value={websiteUrl}
+                      onChange={(e) => setWebsiteUrl(e.target.value)}
+                    />
+                    {pod.pod_settings?.website_url && (
+                      <p className="text-xs text-muted-foreground">
+                        Current: <a href={pod.pod_settings.website_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">{pod.pod_settings.website_url}</a>
+                      </p>
+                    )}
+                  </div>
+                  <div className="space-y-2 ml-3">
+                    <Label>Google Sheet URL <span className="text-muted-foreground text-xs">(analytics)</span></Label>
+                    <Input
+                      type="url"
+                      placeholder="https://docs.google.com/spreadsheets/d/..."
+                      value={googleSheetUrl}
+                      onChange={(e) => setGoogleSheetUrl(e.target.value)}
+                    />
+                    {pod.pod_settings?.google_sheet_url && (
+                      <p className="text-xs text-muted-foreground">
+                        Current: <a href={pod.pod_settings.google_sheet_url} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">View Sheet</a>
+                      </p>
+                    )}
+                  </div>
+                  <div className="ml-3">
+                    <Button
+                      variant="outline"
+                      onClick={handleSaveWebsiteSettings}
+                      disabled={updatePodSettings.isPending}
+                    >
+                      Save Website Settings
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Analytics Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <BarChart3 className="h-4 w-4 text-accent" />
+                Analytics Configuration
+              </CardTitle>
+              <CardDescription>Configure the analytics data source for this client</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {analyticsConfigs && analyticsConfigs.length > 0 ? (
+                <div className="space-y-3">
+                  {analyticsConfigs.map((config: any) => (
+                    <div key={config.id} className="flex items-center justify-between p-3 rounded-lg border border-border">
+                      <div>
+                        <p className="font-medium capitalize">{config.source_type.replace('_', ' ')}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {config.is_active ? 'Active' : 'Inactive'} &middot; Added {new Date(config.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Badge variant={config.is_active ? 'default' : 'secondary'}>
+                        {config.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No analytics source configured.</p>
+              )}
+
+              <div className="flex gap-2 items-end">
+                <div className="flex-1 space-y-2">
+                  <Label>Add Analytics Source</Label>
+                  <select
+                    value={newAnalyticsSource}
+                    onChange={(e) => setNewAnalyticsSource(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="manual">Manual</option>
+                    <option value="vercel">Vercel</option>
+                    <option value="google_analytics">Google Analytics</option>
+                  </select>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!pod?.owner_id) return;
+                    createAnalyticsConfig.mutate({
+                      client_id: pod.owner_id,
+                      source_type: newAnalyticsSource,
+                    });
+                  }}
+                  disabled={createAnalyticsConfig.isPending}
+                >
+                  {createAnalyticsConfig.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+                  Add
+                </Button>
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => pod?.owner_id && syncAnalytics.mutate(pod.owner_id)}
+                  disabled={syncAnalytics.isPending || !analyticsConfigs?.length}
+                >
+                  {syncAnalytics.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Trigger Manual Sync
+                </Button>
               </div>
             </CardContent>
           </Card>

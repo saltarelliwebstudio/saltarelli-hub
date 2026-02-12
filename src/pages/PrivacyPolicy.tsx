@@ -30,12 +30,17 @@ export default function PrivacyPolicy() {
         </div>
 
         <div className="prose prose-invert max-w-none space-y-8">
-          <p className="text-muted-foreground text-sm">
-            Last updated: February 8, 2026
-          </p>
+          <div className="space-y-1">
+            <p className="text-muted-foreground text-sm">
+              <strong className="text-white">Effective Date:</strong> February 10, 2026
+            </p>
+            <p className="text-muted-foreground text-sm">
+              <strong className="text-white">Last Updated:</strong> February 10, 2026
+            </p>
+          </div>
 
           <p className="text-muted-foreground leading-relaxed">
-            Saltarelli Web Studio ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our client dashboard platform.
+            Saltarelli Web Studio ("we," "us," or "our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our services, including but not limited to our client dashboard platform, websites, AI voice agents, and business automation tools.
           </p>
 
           {/* Section 1 */}
@@ -46,28 +51,54 @@ export default function PrivacyPolicy() {
 
             <div className="space-y-4">
               <div>
-                <h3 className="text-base font-medium text-white mb-2">Account Information</h3>
+                <h3 className="text-base font-medium text-white mb-2">Account & Contact Information</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  When your account is created by an administrator, we collect and store:
+                  When your account is created or you engage our services, we may collect and store:
                 </p>
                 <ul className="list-disc list-inside text-muted-foreground space-y-1 mt-2 ml-2">
-                  <li>Full name and email address</li>
-                  <li>Company name and contact details</li>
+                  <li>Full name, email address, and phone number</li>
+                  <li>Business name, address, and contact details</li>
                   <li>Account credentials (passwords are securely hashed)</li>
                   <li>Team member information (if applicable)</li>
                 </ul>
               </div>
 
               <div>
-                <h3 className="text-base font-medium text-white mb-2">Voice Call Data</h3>
+                <h3 className="text-base font-medium text-white mb-2">Voice Call & Communication Data</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  If voice services are enabled for your account, we process and store:
+                  If voice agent or communication services are enabled for your account, we may process and store:
                 </p>
                 <ul className="list-disc list-inside text-muted-foreground space-y-1 mt-2 ml-2">
                   <li>Call recordings and audio files</li>
                   <li>Call transcripts (automatically generated)</li>
-                  <li>Call summaries and metadata (duration, timestamps, caller/called numbers)</li>
+                  <li>Call summaries, metadata (duration, timestamps, caller/called numbers)</li>
+                  <li>SMS/text message logs</li>
                   <li>Call status information (completed, missed, failed)</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-base font-medium text-white mb-2">Business & Automation Data</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Through our automation and business services, we may collect:
+                </p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1 mt-2 ml-2">
+                  <li>Lead information (names, phone numbers, emails, inquiry details)</li>
+                  <li>Booking and scheduling data</li>
+                  <li>Workflow and automation event logs</li>
+                  <li>Website analytics data (page views, visitor counts, traffic sources)</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-base font-medium text-white mb-2">Support & Chat Data</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  When you interact with our support systems, we may store:
+                </p>
+                <ul className="list-disc list-inside text-muted-foreground space-y-1 mt-2 ml-2">
+                  <li>Support request subjects and messages</li>
+                  <li>AI chat conversation logs</li>
+                  <li>Any files or information you share during support interactions</li>
                 </ul>
               </div>
             </div>
@@ -76,68 +107,135 @@ export default function PrivacyPolicy() {
           {/* Section 2 */}
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
-              2. How We Use Your Information
+              2. Services We Provide
             </h2>
-            <p className="text-muted-foreground leading-relaxed">We use the information we collect to:</p>
+            <p className="text-muted-foreground leading-relaxed">
+              This Privacy Policy covers data collected through all of our services, including:
+            </p>
             <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-2">
-              <li>Provide and maintain your dashboard and account access</li>
-              <li>Process and display your voice call data, including recordings, transcripts, and summaries</li>
-              <li>Generate analytics and statistics about your call activity</li>
-              <li>Manage team access and permissions within your workspace</li>
-              <li>Send important account notifications (e.g., magic link sign-ins, password resets)</li>
-              <li>Improve and optimize our platform and services</li>
+              <li>Custom websites designed and hosted on your behalf</li>
+              <li>AI voice agents for inbound and outbound calls</li>
+              <li>Business automations (lead capture, booking systems, SMS workflows)</li>
+              <li>Client dashboard platform for monitoring and managing your services</li>
+              <li>AI-powered support chat</li>
+              <li>Analytics and reporting dashboards</li>
             </ul>
           </section>
 
           {/* Section 3 */}
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
-              3. Third-Party Services
+              3. How We Use Your Information
+            </h2>
+            <p className="text-muted-foreground leading-relaxed">We use the information we collect to:</p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-2">
+              <li>Provide and maintain your dashboard, websites, and account access</li>
+              <li>Process and display your voice call data, including recordings, transcripts, and summaries</li>
+              <li>Run business automations and workflows on your behalf</li>
+              <li>Generate analytics and statistics about your call activity, website traffic, and automations</li>
+              <li>Manage team access and permissions within your workspace</li>
+              <li>Provide AI-powered support and assistance</li>
+              <li>Send important account notifications (e.g., sign-in links, password resets)</li>
+              <li>Improve and optimize our platform and services</li>
+            </ul>
+          </section>
+
+          {/* Section 4 */}
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
+              4. Third-Party Services
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              We use the following third-party services to operate our platform:
+              We use the following third-party services to operate our platform. Each service may store or process data in accordance with their own privacy policies:
             </p>
 
             <div className="space-y-4">
               <div className="bg-card/30 border border-border/30 rounded-lg p-4">
                 <h3 className="text-base font-medium text-white mb-2">Retell AI</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  Retell AI processes voice calls on our behalf. Call recordings, transcripts, and summaries are generated through their platform. Retell AI may store call data on their servers as part of their service. For more information, refer to{' '}
-                  <a
-                    href="https://www.retellai.com/privacy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-accent hover:underline"
-                  >
-                    Retell AI's Privacy Policy
-                  </a>.
+                  Processes voice calls on our behalf. Call recordings, transcripts, and summaries are generated through their platform.{' '}
+                  <a href="https://www.retellai.com/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                    Retell AI Privacy Policy
+                  </a>
+                </p>
+              </div>
+
+              <div className="bg-card/30 border border-border/30 rounded-lg p-4">
+                <h3 className="text-base font-medium text-white mb-2">Twilio</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Provides telephony infrastructure for voice and SMS services. Phone numbers and call/message data may be processed through Twilio's platform.{' '}
+                  <a href="https://www.twilio.com/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                    Twilio Privacy Policy
+                  </a>
+                </p>
+              </div>
+
+              <div className="bg-card/30 border border-border/30 rounded-lg p-4">
+                <h3 className="text-base font-medium text-white mb-2">Stripe</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Handles payment processing and billing. Payment information is processed directly by Stripe and is not stored on our servers.{' '}
+                  <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                    Stripe Privacy Policy
+                  </a>
                 </p>
               </div>
 
               <div className="bg-card/30 border border-border/30 rounded-lg p-4">
                 <h3 className="text-base font-medium text-white mb-2">Google Sheets</h3>
                 <p className="text-muted-foreground text-sm leading-relaxed">
-                  If configured for your account, call log data may be synced to a Google Sheets spreadsheet for your convenience. This is an optional feature and can be enabled or disabled by your administrator. Data shared with Google Sheets is subject to{' '}
-                  <a
-                    href="https://policies.google.com/privacy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-accent hover:underline"
-                  >
-                    Google's Privacy Policy
-                  </a>.
+                  If configured for your account, call log and lead data may be synced to Google Sheets for your convenience.{' '}
+                  <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                    Google Privacy Policy
+                  </a>
+                </p>
+              </div>
+
+              <div className="bg-card/30 border border-border/30 rounded-lg p-4">
+                <h3 className="text-base font-medium text-white mb-2">Vercel</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Hosts our dashboard platform and client websites. May collect basic analytics and access logs.{' '}
+                  <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                    Vercel Privacy Policy
+                  </a>
+                </p>
+              </div>
+
+              <div className="bg-card/30 border border-border/30 rounded-lg p-4">
+                <h3 className="text-base font-medium text-white mb-2">Modal.com</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Used for running serverless compute workloads, including automation processing and AI tasks.
+                </p>
+              </div>
+
+              <div className="bg-card/30 border border-border/30 rounded-lg p-4">
+                <h3 className="text-base font-medium text-white mb-2">GitHub</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  Used for source code management and deployment workflows. No client data is stored in repositories.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* Section 4 */}
+          {/* Section 5 */}
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
-              4. Data Storage and Security
+              5. Data Storage and Security
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              Your data is stored on secure, cloud-hosted infrastructure. We implement industry-standard security measures including:
+              Your data is stored across secure, cloud-hosted infrastructure, including:
+            </p>
+            <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-2">
+              <li><strong className="text-white">Supabase</strong> — Primary database and authentication</li>
+              <li><strong className="text-white">Google Sheets</strong> — Optional data sync for call logs and leads</li>
+              <li><strong className="text-white">Retell AI servers</strong> — Call recordings and transcripts</li>
+              <li><strong className="text-white">Twilio</strong> — Telephony and messaging data</li>
+              <li><strong className="text-white">Vercel</strong> — Application hosting and deployment</li>
+              <li><strong className="text-white">GitHub</strong> — Source code (no client data)</li>
+              <li><strong className="text-white">Modal.com</strong> — Serverless compute processing</li>
+            </ul>
+
+            <p className="text-muted-foreground leading-relaxed mt-4">
+              We implement industry-standard security measures including:
             </p>
             <ul className="list-disc list-inside text-muted-foreground space-y-1 ml-2">
               <li>Encrypted data transmission (HTTPS/TLS)</li>
@@ -150,20 +248,36 @@ export default function PrivacyPolicy() {
             </p>
           </section>
 
-          {/* Section 5 */}
-          <section className="space-y-4">
-            <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
-              5. Data Retention
-            </h2>
-            <p className="text-muted-foreground leading-relaxed">
-              We retain your account information for as long as your account is active. Call recordings, transcripts, and summaries are retained in accordance with your service agreement. When your account is deactivated, we will delete or anonymize your data within a reasonable timeframe, unless retention is required by law.
-            </p>
-          </section>
-
           {/* Section 6 */}
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
-              6. Your Rights
+              6. Cookies
+            </h2>
+            <p className="text-muted-foreground leading-relaxed">
+              Our platform uses cookies strictly for authentication and session management purposes. Specifically, we use Supabase authentication session cookies to keep you signed in to your account. We do not use advertising or tracking cookies.
+            </p>
+          </section>
+
+          {/* Section 7 */}
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
+              7. Data Retention
+            </h2>
+            <p className="text-muted-foreground leading-relaxed">
+              We retain your account information and associated data for the duration of your active service agreement, plus a reasonable period afterward. Call recordings, transcripts, summaries, and automation logs are retained in accordance with your service agreement.
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              When your account is deactivated or your service agreement ends, we will delete or anonymize your data within a reasonable timeframe, unless retention is required by law. To request early deletion of your data, please contact us via email at{' '}
+              <a href="mailto:saltarelliwebstudio@gmail.com" className="text-accent hover:underline">
+                saltarelliwebstudio@gmail.com
+              </a>.
+            </p>
+          </section>
+
+          {/* Section 8 */}
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
+              8. Your Rights
             </h2>
             <p className="text-muted-foreground leading-relaxed">
               Depending on your jurisdiction, you may have the right to:
@@ -180,20 +294,20 @@ export default function PrivacyPolicy() {
             </p>
           </section>
 
-          {/* Section 7 */}
+          {/* Section 9 */}
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
-              7. Changes to This Policy
+              9. Changes to This Policy
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              We may update this Privacy Policy from time to time. We will notify you of any significant changes by posting the new policy on this page and updating the "Last updated" date.
+              We may update this Privacy Policy from time to time. We will notify you of any significant changes by posting the new policy on this page and updating the "Last Updated" date.
             </p>
           </section>
 
-          {/* Section 8 */}
+          {/* Section 10 */}
           <section className="space-y-4">
             <h2 className="text-xl font-semibold text-white border-b border-border/30 pb-2">
-              8. Contact Us
+              10. Contact Us
             </h2>
             <p className="text-muted-foreground leading-relaxed">
               If you have any questions about this Privacy Policy or our data practices, please contact us at:
@@ -221,7 +335,7 @@ export default function PrivacyPolicy() {
       <footer className="border-t border-border/30 mt-12">
         <div className="max-w-4xl mx-auto px-4 py-6 text-center">
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Saltarelli Web Studio. All rights reserved.
+            &copy; {new Date().getFullYear()} Saltarelli Web Studio. All rights reserved.
           </p>
         </div>
       </footer>

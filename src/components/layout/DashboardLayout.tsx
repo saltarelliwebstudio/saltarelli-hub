@@ -33,7 +33,10 @@ import {
   Sun,
   Moon,
   ChevronLeft,
+  Globe,
+  MessageSquare,
 } from 'lucide-react';
+import { NotificationBell } from '@/components/layout/NotificationBell';
 import logo from '@/assets/logo.png';
 
 interface NavItem {
@@ -41,12 +44,13 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
-  requiresModule?: 'voice' | 'automations' | 'billing';
+  requiresModule?: 'voice' | 'automations' | 'billing' | 'analytics' | 'website';
 }
 
 const adminNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Clients', href: '/admin/clients', icon: Users },
+  { label: 'Messages', href: '/admin/messages', icon: MessageSquare },
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { label: 'Integrations', href: '/admin/integrations', icon: Plug },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
@@ -58,6 +62,8 @@ const clientNavItems: NavItem[] = [
   { label: 'Automations', href: '/dashboard/automations', icon: Zap, requiresModule: 'automations' },
   { label: 'Leads', href: '/dashboard/leads', icon: ContactRound },
   { label: 'Support', href: '/dashboard/support', icon: LifeBuoy },
+  { label: 'Website', href: '/dashboard/website', icon: Globe, requiresModule: 'website' },
+  { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, requiresModule: 'analytics' },
   { label: 'Billing', href: '/dashboard/billing', icon: CreditCard, requiresModule: 'billing' },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
@@ -80,9 +86,12 @@ export default function DashboardLayout() {
     
     // Filter client nav items based on pod module settings
     return clientNavItems.filter(item => {
+      // Hide Settings from non-admin users
+      if (item.label === 'Settings') return false;
+
       if (!item.requiresModule) return true;
       if (!myPod?.pod_settings) return false;
-      
+
       if (item.requiresModule === 'voice') {
         return myPod.pod_settings.voice_enabled;
       }
@@ -91,6 +100,12 @@ export default function DashboardLayout() {
       }
       if (item.requiresModule === 'billing') {
         return myPod.pod_settings.billing_enabled;
+      }
+      if (item.requiresModule === 'analytics') {
+        return myPod.pod_settings.analytics_enabled;
+      }
+      if (item.requiresModule === 'website') {
+        return myPod.pod_settings.website_enabled;
       }
       return true;
     });
@@ -222,6 +237,9 @@ export default function DashboardLayout() {
               {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
 
+            {/* Notification bell - admin only */}
+            {isAdmin && <NotificationBell />}
+
             {/* User menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -247,10 +265,12 @@ export default function DashboardLayout() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate(isAdmin ? '/admin/settings' : '/dashboard/settings')}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Settings
-                </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => navigate('/admin/settings')}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    Settings
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
@@ -269,7 +289,7 @@ export default function DashboardLayout() {
         {/* Footer */}
         <footer className="border-t border-border px-4 lg:px-6 py-3 flex items-center justify-center">
           <a
-            href="/privacy"
+            href="/privacy-policy"
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             Privacy Policy

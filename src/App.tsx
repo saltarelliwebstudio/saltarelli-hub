@@ -21,6 +21,7 @@ import ViewAsClient from "@/pages/admin/ViewAsClient";
 import AdminAnalytics from "@/pages/admin/AdminAnalytics";
 import IntegrationSettings from "@/pages/admin/IntegrationSettings";
 import AdminSettings from "@/pages/admin/AdminSettings";
+import AdminMessages from "@/pages/admin/AdminMessages";
 
 // Client Pages
 import ClientDashboard from "@/pages/dashboard/ClientDashboard";
@@ -30,6 +31,8 @@ import Leads from "@/pages/dashboard/Leads";
 import Support from "@/pages/dashboard/Support";
 import Billing from "@/pages/dashboard/Billing";
 import ClientSettings from "@/pages/dashboard/ClientSettings";
+import Analytics from "@/pages/dashboard/Analytics";
+import Website from "@/pages/dashboard/Website";
 
 const queryClient = new QueryClient();
 
@@ -43,7 +46,8 @@ const App = () => (
           <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
-            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<Navigate to="/login" replace />} />
 
@@ -58,6 +62,7 @@ const App = () => (
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/clients" element={<ClientsList />} />
               <Route path="/admin/clients/:podId" element={<ClientDetail />} />
+              <Route path="/admin/messages" element={<AdminMessages />} />
               <Route path="/admin/analytics" element={<AdminAnalytics />} />
               <Route path="/admin/integrations" element={<IntegrationSettings />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
@@ -92,6 +97,8 @@ const App = () => (
               <Route path="/dashboard/automations" element={<Automations />} />
               <Route path="/dashboard/leads" element={<Leads />} />
               <Route path="/dashboard/support" element={<Support />} />
+              <Route path="/dashboard/website" element={<Website />} />
+              <Route path="/dashboard/analytics" element={<Analytics />} />
               <Route path="/dashboard/billing" element={<Billing />} />
               <Route path="/dashboard/settings" element={<ClientSettings />} />
             </Route>

@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
@@ -850,6 +851,9 @@ export function useCreateClient() {
       address?: string;
       voice_enabled?: boolean;
       automations_enabled?: boolean;
+      website_enabled?: boolean;
+      website_url?: string;
+      google_sheet_url?: string;
       retell_accounts?: Array<{
         label: string;
         retell_api_key: string;
@@ -1200,6 +1204,378 @@ export function useUpdateRetellAccount() {
   });
 }
 
+// Fetch analytics config for a client (admin)
+export function useAnalyticsConfig(clientId: string | undefined) {
+  return useQuery({
+    queryKey: ['analytics-config', clientId],
+    queryFn: async () => {
+      if (!clientId) return [];
+
+      const { data, error } = await supabase
+        .from('client_analytics_config')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!clientId,
+  });
+}
+
+// Fetch cached analytics data for a client
+export function useAnalyticsData(clientId: string | undefined, dateRange?: { start: Date; end: Date }) {
+  return useQuery({
+    queryKey: ['analytics-data', clientId, dateRange],
+    queryFn: async () => {
+      if (!clientId) return [];
+
+      let query = supabase
+        .from('client_analytics_data')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('period_start', { ascending: false });
+
+      if (dateRange?.start) {
+        query = query.gte('period_start', dateRange.start.toISOString());
+      }
+      if (dateRange?.end) {
+        query = query.lte('period_end', dateRange.end.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!clientId,
+  });
+}
+
+// Sync analytics mutation
+export function useSyncAnalytics() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (clientId: string) => {
+      const { data: result, error } = await supabase.functions.invoke('sync-analytics', {
+        body: { client_id: clientId },
+      });
+
+      if (error) throw error;
+      if (result.error) throw new Error(result.error);
+      return result;
+    },
+    onSuccess: (result, clientId) => {
+      queryClient.invalidateQueries({ queryKey: ['analytics-data', clientId] });
+      toast({
+        title: 'Analytics synced',
+        description: `Synced ${result.metrics_synced} metrics.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Sync failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Update analytics config mutation (admin)
+export function useUpdateAnalyticsConfig() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, clientId, updates }: { id: string; clientId: string; updates: Record<string, any> }) => {
+      const { data, error } = await supabase
+        .from('client_analytics_config')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { ...data, clientId };
+    },
+    onSuccess: ({ clientId }) => {
+      queryClient.invalidateQueries({ queryKey: ['analytics-config', clientId] });
+      toast({
+        title: 'Analytics config updated',
+        description: 'The configuration has been saved.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update config',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Create analytics config mutation (admin)
+export function useCreateAnalyticsConfig() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { client_id: string; source_type: string; config?: Record<string, any> }) => {
+      const { data: result, error } = await supabase
+        .from('client_analytics_config')
+        .insert(data)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, { client_id }) => {
+      queryClient.invalidateQueries({ queryKey: ['analytics-config', client_id] });
+      toast({
+        title: 'Analytics config created',
+        description: 'The analytics source has been added.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to create config',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Monthly admin stats (date-filtered)
+export function useAdminStatsForMonth(month: number, year: number) {
+  return useQuery({
+    queryKey: ['admin-stats-month', month, year],
+    queryFn: async () => {
+      const start = new Date(year, month, 1).toISOString();
+      const end = new Date(year, month + 1, 1).toISOString();
+
+      const [callsResult, automationsResult] = await Promise.all([
+        supabase
+          .from('call_logs')
+          .select('id', { count: 'exact', head: true })
+          .gte('call_started_at', start)
+          .lt('call_started_at', end),
+        supabase
+          .from('automation_logs')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', start)
+          .lt('created_at', end),
+      ]);
+
+      return {
+        totalCalls: callsResult.count || 0,
+        totalAutomations: automationsResult.count || 0,
+      };
+    },
+  });
+}
+
+// Monthly lead stats
+export function useAllLeadStatsForMonth(month: number, year: number) {
+  return useQuery({
+    queryKey: ['all-lead-stats-month', month, year],
+    queryFn: async () => {
+      const start = new Date(year, month, 1).toISOString();
+      const end = new Date(year, month + 1, 1).toISOString();
+
+      const [totalResult, newResult, qualifiedResult] = await Promise.all([
+        supabase.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', start).lt('created_at', end),
+        supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'new').gte('created_at', start).lt('created_at', end),
+        supabase.from('leads').select('id', { count: 'exact', head: true }).eq('status', 'qualified').gte('created_at', start).lt('created_at', end),
+      ]);
+      return {
+        total: totalResult.count || 0,
+        new: newResult.count || 0,
+        qualified: qualifiedResult.count || 0,
+      };
+    },
+  });
+}
+
+// Monthly support stats
+export function useSupportStatsForMonth(month: number, year: number) {
+  return useQuery({
+    queryKey: ['support-stats-month', month, year],
+    queryFn: async () => {
+      const start = new Date(year, month, 1).toISOString();
+      const end = new Date(year, month + 1, 1).toISOString();
+
+      const [totalResult, openResult] = await Promise.all([
+        supabase.from('support_requests').select('id', { count: 'exact', head: true }).gte('created_at', start).lt('created_at', end),
+        supabase.from('support_requests').select('id', { count: 'exact', head: true }).eq('status', 'open').gte('created_at', start).lt('created_at', end),
+      ]);
+      return {
+        total: totalResult.count || 0,
+        open: openResult.count || 0,
+      };
+    },
+  });
+}
+
+// Monthly per-pod stats
+export function usePerPodStatsForMonth(month: number, year: number) {
+  return useQuery({
+    queryKey: ['per-pod-stats-month', month, year],
+    queryFn: async () => {
+      const start = new Date(year, month, 1).toISOString();
+      const end = new Date(year, month + 1, 1).toISOString();
+
+      const { data: pods, error: podsError } = await supabase
+        .from('pods')
+        .select('id, name, company_name')
+        .order('created_at', { ascending: false });
+
+      if (podsError) throw podsError;
+      if (!pods) return [];
+
+      const stats = await Promise.all(
+        pods.map(async (pod) => {
+          const [callsResult, automationsResult, leadsResult] = await Promise.all([
+            supabase.from('call_logs').select('id', { count: 'exact', head: true }).eq('pod_id', pod.id).gte('call_started_at', start).lt('call_started_at', end),
+            supabase.from('automation_logs').select('id', { count: 'exact', head: true }).eq('pod_id', pod.id).gte('created_at', start).lt('created_at', end),
+            supabase.from('leads').select('id', { count: 'exact', head: true }).eq('pod_id', pod.id).gte('created_at', start).lt('created_at', end),
+          ]);
+          return {
+            podId: pod.id,
+            name: pod.company_name || pod.name,
+            calls: callsResult.count || 0,
+            automations: automationsResult.count || 0,
+            leads: leadsResult.count || 0,
+          };
+        })
+      );
+
+      return stats.sort((a, b) => b.calls - a.calls);
+    },
+  });
+}
+
+// Monthly call logs for breakdown
+export function useAllCallLogsForMonth(month: number, year: number) {
+  return useQuery({
+    queryKey: ['all-call-logs-month', month, year],
+    queryFn: async () => {
+      const start = new Date(year, month, 1).toISOString();
+      const end = new Date(year, month + 1, 1).toISOString();
+
+      const { data, error } = await supabase
+        .from('call_logs')
+        .select('*, pods(name, company_name)')
+        .gte('call_started_at', start)
+        .lt('call_started_at', end)
+        .order('call_started_at', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+  });
+}
+
+// Monthly history summaries (past 12 months)
+export function useMonthlyHistorySummaries() {
+  return useQuery({
+    queryKey: ['monthly-history-summaries'],
+    queryFn: async () => {
+      const now = new Date();
+      const months: { month: number; year: number }[] = [];
+      for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push({ month: d.getMonth(), year: d.getFullYear() });
+      }
+
+      const summaries = await Promise.all(
+        months.map(async ({ month, year }) => {
+          const start = new Date(year, month, 1).toISOString();
+          const end = new Date(year, month + 1, 1).toISOString();
+
+          const [callsResult, automationsResult, leadsResult] = await Promise.all([
+            supabase.from('call_logs').select('id', { count: 'exact', head: true }).gte('call_started_at', start).lt('call_started_at', end),
+            supabase.from('automation_logs').select('id', { count: 'exact', head: true }).gte('created_at', start).lt('created_at', end),
+            supabase.from('leads').select('id', { count: 'exact', head: true }).gte('created_at', start).lt('created_at', end),
+          ]);
+
+          return {
+            month,
+            year,
+            calls: callsResult.count || 0,
+            automations: automationsResult.count || 0,
+            leads: leadsResult.count || 0,
+          };
+        })
+      );
+
+      return summaries;
+    },
+  });
+}
+
+// Call volume stats (past week / past month with trends)
+export function useCallVolumeStats() {
+  return useQuery({
+    queryKey: ['call-volume-stats'],
+    queryFn: async () => {
+      const now = new Date();
+      const startOfThisWeek = new Date(now);
+      startOfThisWeek.setDate(now.getDate() - now.getDay());
+      startOfThisWeek.setHours(0, 0, 0, 0);
+
+      const startOfLastWeek = new Date(startOfThisWeek);
+      startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+      const [thisWeekResult, lastWeekResult, thisMonthResult, lastMonthResult] = await Promise.all([
+        supabase
+          .from('call_logs')
+          .select('id', { count: 'exact', head: true })
+          .gte('call_started_at', startOfThisWeek.toISOString()),
+        supabase
+          .from('call_logs')
+          .select('id', { count: 'exact', head: true })
+          .gte('call_started_at', startOfLastWeek.toISOString())
+          .lt('call_started_at', startOfThisWeek.toISOString()),
+        supabase
+          .from('call_logs')
+          .select('id', { count: 'exact', head: true })
+          .gte('call_started_at', startOfThisMonth.toISOString()),
+        supabase
+          .from('call_logs')
+          .select('id', { count: 'exact', head: true })
+          .gte('call_started_at', startOfLastMonth.toISOString())
+          .lt('call_started_at', startOfThisMonth.toISOString()),
+      ]);
+
+      const thisWeek = thisWeekResult.count || 0;
+      const lastWeek = lastWeekResult.count || 0;
+      const thisMonth = thisMonthResult.count || 0;
+      const lastMonth = lastMonthResult.count || 0;
+
+      const weekTrend = lastWeek > 0 ? Math.round(((thisWeek - lastWeek) / lastWeek) * 100) : thisWeek > 0 ? 100 : 0;
+      const monthTrend = lastMonth > 0 ? Math.round(((thisMonth - lastMonth) / lastMonth) * 100) : thisMonth > 0 ? 100 : 0;
+
+      return {
+        thisWeek,
+        lastWeek,
+        thisMonth,
+        lastMonth,
+        weekTrend,
+        monthTrend,
+      };
+    },
+  });
+}
+
 // Delete retell account mutation
 export function useDeleteRetellAccount() {
   const queryClient = useQueryClient();
@@ -1230,4 +1606,232 @@ export function useDeleteRetellAccount() {
       });
     },
   });
+}
+
+// --- Direct Messaging Hooks ---
+
+export type DirectMessage = Tables<'direct_messages'>;
+
+// Get the admin user ID (cached)
+export function useAdminUserId() {
+  return useQuery({
+    queryKey: ['admin-user-id'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('user_id')
+        .eq('role', 'admin')
+        .limit(1)
+        .single();
+
+      if (error) throw error;
+      return data.user_id;
+    },
+    staleTime: Infinity,
+  });
+}
+
+// Fetch direct messages for a conversation (between current user and another user, in a pod)
+export function useDirectMessages(podId: string | undefined, otherUserId: string | undefined) {
+  return useQuery({
+    queryKey: ['direct-messages', podId, otherUserId],
+    queryFn: async () => {
+      if (!podId || !otherUserId) return [];
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from('direct_messages')
+        .select('*')
+        .eq('pod_id', podId)
+        .or(`and(sender_id.eq.${user.id},recipient_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},recipient_id.eq.${user.id})`)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      return data as DirectMessage[];
+    },
+    enabled: !!podId && !!otherUserId,
+  });
+}
+
+// Send a direct message
+export function useSendDirectMessage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      recipient_id: string;
+      pod_id: string;
+      content: string;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data: result, error } = await supabase
+        .from('direct_messages')
+        .insert({
+          sender_id: user.id,
+          recipient_id: data.recipient_id,
+          pod_id: data.pod_id,
+          content: data.content,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: (_, { pod_id, recipient_id }) => {
+      queryClient.invalidateQueries({ queryKey: ['direct-messages', pod_id, recipient_id] });
+      queryClient.invalidateQueries({ queryKey: ['admin-conversations'] });
+    },
+  });
+}
+
+// Get unread message count for current user
+export function useUnreadMessageCount() {
+  return useQuery({
+    queryKey: ['unread-message-count'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return 0;
+
+      const { count, error } = await supabase
+        .from('direct_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('recipient_id', user.id)
+        .eq('read', false);
+
+      if (error) throw error;
+      return count || 0;
+    },
+  });
+}
+
+// Get admin conversations (grouped by pod, with latest message)
+export function useAdminConversations() {
+  return useQuery({
+    queryKey: ['admin-conversations'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      // Fetch all messages involving admin
+      const { data: messages, error } = await supabase
+        .from('direct_messages')
+        .select('*, pods(name, company_name)')
+        .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      if (!messages) return [];
+
+      // Group by pod_id, take latest message per pod
+      const podMap = new Map<string, any>();
+      for (const msg of messages) {
+        if (!podMap.has(msg.pod_id)) {
+          const unreadCount = messages.filter(
+            m => m.pod_id === msg.pod_id && m.recipient_id === user.id && !m.read
+          ).length;
+
+          podMap.set(msg.pod_id, {
+            podId: msg.pod_id,
+            podName: (msg as any).pods?.company_name || (msg as any).pods?.name || 'Unknown',
+            lastMessage: msg.content,
+            lastMessageAt: msg.created_at,
+            unreadCount,
+            otherUserId: msg.sender_id === user.id ? msg.recipient_id : msg.sender_id,
+          });
+        }
+      }
+
+      return Array.from(podMap.values());
+    },
+  });
+}
+
+// Mark messages as read
+export function useMarkMessagesAsRead() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ podId, senderId }: { podId: string; senderId: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { error } = await supabase
+        .from('direct_messages')
+        .update({ read: true })
+        .eq('pod_id', podId)
+        .eq('sender_id', senderId)
+        .eq('recipient_id', user.id)
+        .eq('read', false);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-conversations'] });
+    },
+  });
+}
+
+// Realtime subscription for direct messages
+export function useDirectMessageSubscription(podId: string | undefined, onNewMessage?: () => void) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!podId) return;
+
+    const channel = supabase
+      .channel(`direct-messages-${podId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'direct_messages',
+          filter: `pod_id=eq.${podId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['direct-messages', podId] });
+          queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+          queryClient.invalidateQueries({ queryKey: ['admin-conversations'] });
+          onNewMessage?.();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [podId, queryClient, onNewMessage]);
+}
+
+// Realtime subscription for unread count (used by NotificationBell)
+export function useUnreadMessageSubscription() {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('direct-messages-unread')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'direct_messages',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ['unread-message-count'] });
+          queryClient.invalidateQueries({ queryKey: ['admin-conversations'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
 }

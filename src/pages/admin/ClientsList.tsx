@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Phone, Zap, MoreVertical, Building2, Trash2 } from 'lucide-react';
+import { Plus, Search, Phone, Zap, Monitor, MoreVertical, Building2, Trash2 } from 'lucide-react';
 import { CreateClientModal } from '@/components/admin/CreateClientModal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -176,7 +176,12 @@ export default function ClientsList() {
                           <Zap className="h-3.5 w-3.5 text-muted-foreground" />
                         </div>
                       )}
-                      {!pod.pod_settings?.voice_enabled && !pod.pod_settings?.automations_enabled && (
+                      {pod.pod_settings?.website_enabled && (
+                        <div className="rounded-md bg-muted p-1.5" title="Website">
+                          <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                      )}
+                      {!pod.pod_settings?.voice_enabled && !pod.pod_settings?.automations_enabled && !pod.pod_settings?.website_enabled && (
                         <span className="text-sm text-muted-foreground">None</span>
                       )}
                     </div>

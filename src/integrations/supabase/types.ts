@@ -125,6 +125,44 @@ export type Database = {
           },
         ]
       }
+      direct_messages: {
+        Row: {
+          id: string
+          sender_id: string
+          recipient_id: string
+          pod_id: string
+          content: string
+          read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          sender_id: string
+          recipient_id: string
+          pod_id: string
+          content: string
+          read?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          sender_id?: string
+          recipient_id?: string
+          pod_id?: string
+          content?: string
+          read?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "direct_messages_pod_id_fkey"
+            columns: ["pod_id"]
+            isOneToOne: false
+            referencedRelation: "pods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_logs: {
         Row: {
           call_started_at: string | null
@@ -270,8 +308,130 @@ export type Database = {
           },
         ]
       }
+      chat_logs: {
+        Row: {
+          id: string
+          user_id: string
+          pod_id: string | null
+          role: string
+          content: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          pod_id?: string | null
+          role: string
+          content: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          pod_id?: string | null
+          role?: string
+          content?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_logs_pod_id_fkey"
+            columns: ["pod_id"]
+            isOneToOne: false
+            referencedRelation: "pods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_analytics_config: {
+        Row: {
+          id: string
+          client_id: string
+          source_type: string
+          config: Json
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          source_type: string
+          config?: Json
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          source_type?: string
+          config?: Json
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_analytics_config_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_analytics_data: {
+        Row: {
+          id: string
+          client_id: string
+          source_type: string
+          metric_name: string
+          metric_value: Json
+          period_start: string
+          period_end: string
+          synced_at: string
+        }
+        Insert: {
+          id?: string
+          client_id: string
+          source_type: string
+          metric_name: string
+          metric_value: Json
+          period_start: string
+          period_end: string
+          synced_at?: string
+        }
+        Update: {
+          id?: string
+          client_id?: string
+          source_type?: string
+          metric_name?: string
+          metric_value?: Json
+          period_start?: string
+          period_end?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_analytics_data_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pod_settings: {
         Row: {
+          analytics_enabled: boolean
           automations_enabled: boolean
           billing_enabled: boolean
           created_at: string
@@ -280,8 +440,12 @@ export type Database = {
           updated_at: string
           visible_modules: Json | null
           voice_enabled: boolean
+          website_enabled: boolean
+          website_url: string | null
+          google_sheet_url: string | null
         }
         Insert: {
+          analytics_enabled?: boolean
           automations_enabled?: boolean
           billing_enabled?: boolean
           created_at?: string
@@ -290,8 +454,12 @@ export type Database = {
           updated_at?: string
           visible_modules?: Json | null
           voice_enabled?: boolean
+          website_enabled?: boolean
+          website_url?: string | null
+          google_sheet_url?: string | null
         }
         Update: {
+          analytics_enabled?: boolean
           automations_enabled?: boolean
           billing_enabled?: boolean
           created_at?: string
@@ -300,6 +468,9 @@ export type Database = {
           updated_at?: string
           visible_modules?: Json | null
           voice_enabled?: boolean
+          website_enabled?: boolean
+          website_url?: string | null
+          google_sheet_url?: string | null
         }
         Relationships: [
           {
