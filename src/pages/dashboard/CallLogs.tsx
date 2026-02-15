@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useOutletContext, Navigate } from 'react-router-dom';
-import { Search, Phone, PhoneIncoming, PhoneOutgoing, Clock } from 'lucide-react';
+import { Search, Phone, PhoneIncoming, PhoneOutgoing, Clock, ExternalLink, FileSpreadsheet } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -28,9 +28,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import { useMyPod, useCallLogsPaginated, CallLog, PodWithSettings } from '@/hooks/useSupabaseData';
+import { useMyPod, useCallLogsPaginated, useRetellGoogleSheets, CallLog, PodWithSettings } from '@/hooks/useSupabaseData';
 
 interface ViewAsClientContext {
   pod: PodWithSettings;
@@ -63,6 +64,38 @@ function formatPhone(phone: string | null): string {
   return phone;
 }
 
+function isAgentSpeaker(role: string): boolean {
+  const lower = role.toLowerCase();
+  return lower === 'agent' || lower === 'assistant' || lower === 'bot';
+}
+
+interface TranscriptLine {
+  role: string;
+  content: string;
+}
+
+function parseTranscript(raw: string): TranscriptLine[] | null {
+  const lines = raw.split('\n').filter(l => l.trim());
+  const parsed: TranscriptLine[] = [];
+  const speakerPattern = /^([A-Za-z_]+):\s*(.*)$/;
+
+  let hasSpeakerLabels = false;
+  for (const line of lines) {
+    const match = line.match(speakerPattern);
+    if (match) {
+      hasSpeakerLabels = true;
+      parsed.push({ role: match[1], content: match[2] });
+    } else if (parsed.length > 0) {
+      // Continuation of previous line
+      parsed[parsed.length - 1].content += '\n' + line;
+    } else {
+      parsed.push({ role: '', content: line });
+    }
+  }
+
+  return hasSpeakerLabels ? parsed : null;
+}
+
 export default function CallLogs() {
   const context = useOutletContext<ViewAsClientContext | null>();
   const isViewAsClient = context?.isViewAsClient;
@@ -71,6 +104,8 @@ export default function CallLogs() {
   const { data: myPod, isLoading: podLoading } = useMyPod();
   const pod = isViewAsClient ? viewAsPod : myPod;
   const podId = pod?.id;
+
+  const { data: googleSheets } = useRetellGoogleSheets(podId);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -111,6 +146,35 @@ export default function CallLogs() {
         <p className="text-muted-foreground">View and manage your voice agent call history</p>
       </div>
 
+      {/* Google Sheet Links */}
+      {googleSheets && googleSheets.length > 0 && (
+        <Card className="border-green-500/20 bg-green-500/5">
+          <CardContent className="py-3 px-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="h-5 w-5 text-green-500" />
+                <span className="text-sm font-medium">Call Log Spreadsheet{googleSheets.length > 1 ? 's' : ''}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {googleSheets.map((sheet) => (
+                  <a
+                    key={sheet.id}
+                    href={sheet.google_sheet_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="outline" size="sm" className="gap-1.5">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {sheet.label}
+                    </Button>
+                  </a>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1 max-w-sm">
@@ -123,7 +187,7 @@ export default function CallLogs() {
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
           <SelectContent>
@@ -135,7 +199,7 @@ export default function CallLogs() {
           </SelectContent>
         </Select>
         <Select value={directionFilter} onValueChange={setDirectionFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue placeholder="Filter by direction" />
           </SelectTrigger>
           <SelectContent>
@@ -147,14 +211,14 @@ export default function CallLogs() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border bg-card">
+      <div className="rounded-xl border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Date/Time</TableHead>
               <TableHead>Phone Number</TableHead>
-              <TableHead>Direction</TableHead>
-              <TableHead>Duration</TableHead>
+              <TableHead className="hidden sm:table-cell">Direction</TableHead>
+              <TableHead className="hidden sm:table-cell">Duration</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="hidden lg:table-cell">Summary</TableHead>
               <TableHead className="w-[100px]">Actions</TableHead>
@@ -166,8 +230,8 @@ export default function CallLogs() {
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                   <TableCell className="hidden lg:table-cell"><Skeleton className="h-4 w-40" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-16" /></TableCell>
@@ -202,7 +266,7 @@ export default function CallLogs() {
                   <TableCell>
                     {formatPhone(call.direction === 'inbound' ? call.caller_number : call.called_number)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden sm:table-cell">
                     <div className="flex items-center gap-2">
                       {call.direction === 'inbound' ? (
                         <PhoneIncoming className="h-4 w-4 text-success" />
@@ -212,7 +276,7 @@ export default function CallLogs() {
                       <span className="capitalize">{call.direction}</span>
                     </div>
                   </TableCell>
-                  <TableCell>{formatDuration(call.duration_seconds)}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{formatDuration(call.duration_seconds)}</TableCell>
                   <TableCell>
                     <Badge
                       variant="outline"
@@ -318,13 +382,38 @@ export default function CallLogs() {
               {/* Transcript - scrollable */}
               <div className="space-y-2 flex-1 overflow-hidden flex flex-col min-h-0">
                 <p className="text-sm font-medium">Transcript</p>
-                {selectedCall.transcript ? (
-                  <ScrollArea className="flex-1 rounded-lg border bg-muted/30 p-4">
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
-                      {selectedCall.transcript}
-                    </p>
-                  </ScrollArea>
-                ) : (
+                {selectedCall.transcript ? (() => {
+                  const parsed = parseTranscript(selectedCall.transcript);
+                  if (parsed) {
+                    return (
+                      <ScrollArea className="flex-1 rounded-lg border bg-muted/30 p-4">
+                        <div className="space-y-3">
+                          {parsed.map((line, i) => {
+                            const isAgent = isAgentSpeaker(line.role);
+                            return (
+                              <div key={i} className={cn('flex', isAgent ? 'justify-start' : 'justify-end')}>
+                                <div className={cn(
+                                  'max-w-[80%] rounded-lg px-3 py-2',
+                                  isAgent ? 'bg-accent/10 text-foreground' : 'bg-muted text-foreground'
+                                )}>
+                                  <p className="text-xs font-semibold mb-1 capitalize opacity-70">{line.role}</p>
+                                  <p className="text-sm leading-relaxed">{line.content}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </ScrollArea>
+                    );
+                  }
+                  return (
+                    <ScrollArea className="flex-1 rounded-lg border bg-muted/30 p-4">
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed font-sans">
+                        {selectedCall.transcript}
+                      </p>
+                    </ScrollArea>
+                  );
+                })() : (
                   <div className="flex-1 rounded-lg border bg-muted/30 p-4 flex items-center justify-center">
                     <p className="text-sm text-muted-foreground italic">Transcript not available</p>
                   </div>

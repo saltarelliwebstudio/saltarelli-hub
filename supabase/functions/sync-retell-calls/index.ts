@@ -113,8 +113,8 @@ Deno.serve(async (req) => {
             if (typeof call.transcript === "string") {
               transcriptText = call.transcript;
             } else if (Array.isArray(call.transcript)) {
-              transcriptText = (call.transcript as Array<{ content?: string }>)
-                .map((t) => t.content || "")
+              transcriptText = (call.transcript as Array<{ role?: string; content?: string }>)
+                .map((t) => `${t.role || "Unknown"}: ${t.content || ""}`)
                 .join("\n");
             }
           }

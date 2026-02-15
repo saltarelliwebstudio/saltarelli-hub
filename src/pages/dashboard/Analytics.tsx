@@ -1,19 +1,24 @@
 import { useState, useMemo } from 'react';
-import { BarChart3, Eye, Users, TrendingDown, RefreshCw, Loader2 } from 'lucide-react';
+import { useOutletContext } from 'react-router-dom';
+import { BarChart3, Eye, Users, TrendingDown, RefreshCw, Loader2, Phone, Clock, PhoneOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StatCard } from '@/components/ui/stat-card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
-import { useMyPod, useAnalyticsData, useSyncAnalytics } from '@/hooks/useSupabaseData';
+import { useMyPod, useAnalyticsData, useSyncAnalytics, useClientStats, useClientMonthlyStats, PodWithSettings } from '@/hooks/useSupabaseData';
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from 'recharts';
 import { format, subDays } from 'date-fns';
 
@@ -25,9 +30,34 @@ const DATE_RANGES: { label: string; value: DateRangeOption; days: number }[] = [
   { label: '90 Days', value: '90d', days: 90 },
 ];
 
+const SHORT_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+function formatDuration(seconds: number): string {
+  if (!seconds) return '0s';
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (mins === 0) return `${secs}s`;
+  return `${mins}m ${secs}s`;
+}
+
+interface ViewAsClientContext {
+  pod: PodWithSettings;
+  isViewAsClient: boolean;
+}
+
 export default function Analytics() {
   const { userWithRole } = useAuth();
-  const { data: pod, isLoading: podLoading } = useMyPod();
+  const context = useOutletContext<ViewAsClientContext | null>();
+  const isViewAsClient = context?.isViewAsClient;
+  const viewAsPod = context?.pod;
+
+  const { data: myPod, isLoading: podLoading } = useMyPod();
+  const pod = isViewAsClient ? viewAsPod : myPod;
+  const podId = pod?.id;
+
   const [dateRange, setDateRange] = useState<DateRangeOption>('30d');
   const syncAnalytics = useSyncAnalytics();
 
@@ -39,6 +69,12 @@ export default function Analytics() {
     pod?.owner_id,
     { start: startDate, end: endDate }
   );
+
+  // Voice agent data
+  const voiceEnabled = pod?.pod_settings?.voice_enabled;
+  const websiteEnabled = pod?.pod_settings?.website_enabled || pod?.pod_settings?.analytics_enabled;
+  const { data: clientStats, isLoading: clientStatsLoading } = useClientStats(podId);
+  const { data: monthlyStats, isLoading: monthlyStatsLoading } = useClientMonthlyStats(podId);
 
   const isLoading = podLoading || dataLoading;
 
@@ -96,7 +132,10 @@ export default function Analytics() {
       }, new Date(0))
     : null;
 
-  const hasData = analyticsData && analyticsData.length > 0;
+  const hasWebsiteData = analyticsData && analyticsData.length > 0;
+
+  // Determine default tab
+  const defaultTab = voiceEnabled ? 'voice' : 'website';
 
   if (isLoading) {
     return (
@@ -118,150 +157,239 @@ export default function Analytics() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-          <p className="text-muted-foreground">Website traffic and performance metrics</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Date range toggle */}
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            {DATE_RANGES.map((range) => (
-              <button
-                key={range.value}
-                onClick={() => setDateRange(range.value)}
-                className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                  dateRange === range.value
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                {range.label}
-              </button>
-            ))}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => pod?.owner_id && syncAnalytics.mutate(pod.owner_id)}
-            disabled={syncAnalytics.isPending}
-          >
-            {syncAnalytics.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
-            )}
-            Refresh
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
+        <p className="text-muted-foreground">Performance metrics and insights</p>
       </div>
 
-      {lastSynced && (
-        <p className="text-xs text-muted-foreground">
-          Last synced: {format(lastSynced, 'MMM d, yyyy h:mm a')}
-        </p>
-      )}
+      <Tabs defaultValue={defaultTab} className="space-y-6">
+        <TabsList>
+          {voiceEnabled && <TabsTrigger value="voice">Voice Agent</TabsTrigger>}
+          <TabsTrigger value="website">Website</TabsTrigger>
+        </TabsList>
 
-      {!hasData ? (
-        /* Empty state */
-        <Card className="py-16">
-          <CardContent className="flex flex-col items-center justify-center text-center">
-            <BarChart3 className="h-12 w-12 text-muted-foreground/50 mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Analytics are being set up for your account</h3>
-            <p className="text-sm text-muted-foreground max-w-md">
-              Contact support if you have questions about when your analytics will be available.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {/* Stat cards */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <StatCard
-              title="Page Views"
-              value={metrics.pageViews.toLocaleString()}
-              icon={Eye}
-            />
-            <StatCard
-              title="Unique Visitors"
-              value={metrics.uniqueVisitors.toLocaleString()}
-              icon={Users}
-            />
-            <StatCard
-              title="Bounce Rate"
-              value={`${metrics.bounceRate}%`}
-              icon={TrendingDown}
-            />
+        {/* Voice Agent Tab */}
+        {voiceEnabled && (
+          <TabsContent value="voice" className="space-y-6">
+            {/* Voice Stat Cards */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {clientStatsLoading ? (
+                <>
+                  <Skeleton className="h-[120px] rounded-xl" />
+                  <Skeleton className="h-[120px] rounded-xl" />
+                  <Skeleton className="h-[120px] rounded-xl" />
+                </>
+              ) : (
+                <>
+                  <StatCard
+                    title="Total Calls"
+                    value={clientStats?.totalCalls || 0}
+                    icon={Phone}
+                  />
+                  <StatCard
+                    title="Avg Duration"
+                    value={formatDuration(clientStats?.avgDuration || 0)}
+                    icon={Clock}
+                  />
+                  <StatCard
+                    title="Missed Calls"
+                    value={clientStats?.missedCalls || 0}
+                    icon={PhoneOff}
+                    variant={clientStats?.missedCalls && clientStats.missedCalls > 0 ? 'warning' : 'default'}
+                  />
+                </>
+              )}
+            </div>
+
+            {/* Monthly Bar Chart */}
+            {monthlyStatsLoading ? (
+              <Skeleton className="h-[340px] rounded-xl" />
+            ) : monthlyStats && monthlyStats.length > 0 ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-accent" />
+                    Monthly Call Volume
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={monthlyStats.map(s => ({
+                      name: `${SHORT_MONTHS[s.month]} ${s.year}`,
+                      Calls: s.calls,
+                      Missed: s.missedCalls,
+                    }))}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="Calls" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Missed" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="py-12">
+                <CardContent className="flex flex-col items-center justify-center text-center">
+                  <Phone className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground">No call data available yet.</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        )}
+
+        {/* Website Tab */}
+        <TabsContent value="website" className="space-y-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              {/* Date range toggle */}
+              <div className="flex rounded-lg border border-border overflow-hidden">
+                {DATE_RANGES.map((range) => (
+                  <button
+                    key={range.value}
+                    onClick={() => setDateRange(range.value)}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                      dateRange === range.value
+                        ? 'bg-accent text-accent-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => pod?.owner_id && syncAnalytics.mutate(pod.owner_id)}
+                disabled={syncAnalytics.isPending}
+              >
+                {syncAnalytics.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                )}
+                Refresh
+              </Button>
+            </div>
           </div>
 
-          {/* Traffic chart */}
-          {metrics.chartData.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Traffic Overview</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={metrics.chartData}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 12 }}
-                      className="text-muted-foreground"
-                    />
-                    <YAxis
-                      tick={{ fontSize: 12 }}
-                      className="text-muted-foreground"
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                      }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="views"
-                      stroke="hsl(var(--accent))"
-                      strokeWidth={2}
-                      name="Page Views"
-                      dot={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="visitors"
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeWidth={2}
-                      name="Visitors"
-                      dot={false}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+          {lastSynced && (
+            <p className="text-xs text-muted-foreground">
+              Last synced: {format(lastSynced, 'MMM d, yyyy h:mm a')}
+            </p>
           )}
 
-          {/* Top pages table */}
-          {metrics.topPages.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Top Pages</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {metrics.topPages.slice(0, 10).map((page, i) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
-                      <span className="text-sm font-medium truncate max-w-[70%]">{page.page}</span>
-                      <span className="text-sm text-muted-foreground">{page.views.toLocaleString()} views</span>
-                    </div>
-                  ))}
-                </div>
+          {!hasWebsiteData ? (
+            <Card className="py-16">
+              <CardContent className="flex flex-col items-center justify-center text-center">
+                <BarChart3 className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Analytics are being set up for your account</h3>
+                <p className="text-sm text-muted-foreground max-w-md">
+                  Contact support if you have questions about when your analytics will be available.
+                </p>
               </CardContent>
             </Card>
+          ) : (
+            <>
+              {/* Stat cards */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <StatCard
+                  title="Page Views"
+                  value={metrics.pageViews.toLocaleString()}
+                  icon={Eye}
+                />
+                <StatCard
+                  title="Unique Visitors"
+                  value={metrics.uniqueVisitors.toLocaleString()}
+                  icon={Users}
+                />
+                <StatCard
+                  title="Bounce Rate"
+                  value={`${metrics.bounceRate}%`}
+                  icon={TrendingDown}
+                />
+              </div>
+
+              {/* Traffic chart */}
+              {metrics.chartData.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Traffic Overview</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={metrics.chartData}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                        <XAxis
+                          dataKey="date"
+                          tick={{ fontSize: 12 }}
+                          className="text-muted-foreground"
+                        />
+                        <YAxis
+                          tick={{ fontSize: 12 }}
+                          className="text-muted-foreground"
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="views"
+                          stroke="hsl(var(--accent))"
+                          strokeWidth={2}
+                          name="Page Views"
+                          dot={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="visitors"
+                          stroke="hsl(var(--muted-foreground))"
+                          strokeWidth={2}
+                          name="Visitors"
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Top pages table */}
+              {metrics.topPages.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Top Pages</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {metrics.topPages.slice(0, 10).map((page, i) => (
+                        <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-muted/50">
+                          <span className="text-sm font-medium truncate max-w-[70%]">{page.page}</span>
+                          <span className="text-sm text-muted-foreground">{page.views.toLocaleString()} views</span>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
           )}
-        </>
-      )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

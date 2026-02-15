@@ -248,7 +248,7 @@ export default function Leads() {
             Lead Tracker
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="overflow-x-auto">
           {!leads || leads.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <ContactRound className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -262,8 +262,8 @@ export default function Leads() {
                   <TableHead>Name</TableHead>
                   <TableHead>Contact</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead className="hidden md:table-cell">Source</TableHead>
+                  <TableHead className="hidden md:table-cell">Date</TableHead>
                   <TableHead className="w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -311,10 +311,10 @@ export default function Leads() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm capitalize">
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm capitalize">
                       {lead.source?.replace('_', ' ') || 'Unknown'}
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
                       {format(new Date(lead.created_at), 'MMM d, yyyy')}
                     </TableCell>
                     <TableCell>

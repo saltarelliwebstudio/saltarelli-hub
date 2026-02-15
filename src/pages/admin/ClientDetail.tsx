@@ -40,7 +40,18 @@ import {
   useAnalyticsConfig,
   useCreateAnalyticsConfig,
   useSyncAnalytics,
+  useClientMonthlyStats,
 } from '@/hooks/useSupabaseData';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -77,6 +88,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+
+const SHORT_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
 
 // Helper to format phone numbers
 function formatPhone(phone: string | null): string {
@@ -123,6 +139,7 @@ export default function ClientDetail() {
   const { data: analyticsConfigs } = useAnalyticsConfig(pod?.owner_id);
   const createAnalyticsConfig = useCreateAnalyticsConfig();
   const syncAnalytics = useSyncAnalytics();
+  const { data: monthlyStats, isLoading: monthlyStatsLoading } = useClientMonthlyStats(podId);
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [resetPasswordModalOpen, setResetPasswordModalOpen] = useState(false);
@@ -337,12 +354,13 @@ export default function ClientDetail() {
 
       {/* Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList>
+        <TabsList className="overflow-x-auto flex-nowrap justify-start w-full">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="calls">Call Logs</TabsTrigger>
           <TabsTrigger value="automations">Automations</TabsTrigger>
           <TabsTrigger value="retell">Retell Accounts</TabsTrigger>
           <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
         </TabsList>
 
@@ -387,7 +405,7 @@ export default function ClientDetail() {
             </Button>
           </div>
           
-          <Card>
+          <Card className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -454,7 +472,7 @@ export default function ClientDetail() {
         <TabsContent value="automations" className="space-y-4">
           <h3 className="text-lg font-semibold">Automation Events</h3>
           
-          <Card>
+          <Card className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -519,7 +537,7 @@ export default function ClientDetail() {
             </Button>
           </div>
           
-          <Card>
+          <Card className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -677,6 +695,93 @@ export default function ClientDetail() {
               ))
             )}
           </div>
+        </TabsContent>
+
+        {/* Analytics Tab */}
+        <TabsContent value="analytics" className="space-y-4">
+          <h3 className="text-lg font-semibold">Monthly Analytics</h3>
+
+          {monthlyStatsLoading ? (
+            <div className="space-y-4">
+              <Skeleton className="h-[300px] rounded-xl" />
+              <Skeleton className="h-[200px] rounded-xl" />
+            </div>
+          ) : !monthlyStats || monthlyStats.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center text-muted-foreground">
+                <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No monthly data available yet.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Monthly Bar Chart */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-accent" />
+                    Calls per Month
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={monthlyStats.map(s => ({
+                      name: `${SHORT_MONTHS[s.month]} ${s.year}`,
+                      Calls: s.calls,
+                      Missed: s.missedCalls,
+                    }))}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="Calls" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="Missed" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Monthly Details Table */}
+              <Card className="overflow-x-auto">
+                <CardHeader>
+                  <CardTitle className="text-base">Monthly Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Month</TableHead>
+                        <TableHead className="text-right">Calls</TableHead>
+                        <TableHead className="text-right">Missed</TableHead>
+                        <TableHead className="text-right">Minutes</TableHead>
+                        <TableHead className="text-right">Automations</TableHead>
+                        <TableHead className="text-right">Leads</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {monthlyStats.map((s) => (
+                        <TableRow key={`${s.year}-${s.month}`}>
+                          <TableCell className="font-medium">{SHORT_MONTHS[s.month]} {s.year}</TableCell>
+                          <TableCell className="text-right">{s.calls}</TableCell>
+                          <TableCell className="text-right">{s.missedCalls}</TableCell>
+                          <TableCell className="text-right">{s.totalMinutes}</TableCell>
+                          <TableCell className="text-right">{s.automations}</TableCell>
+                          <TableCell className="text-right">{s.leads}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         {/* Settings Tab */}

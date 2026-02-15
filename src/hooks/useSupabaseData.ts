@@ -1576,6 +1576,82 @@ export function useCallVolumeStats() {
   });
 }
 
+// Per-client monthly stats (for client analytics tab)
+export function useClientMonthlyStats(podId: string | undefined, monthCount = 6) {
+  return useQuery({
+    queryKey: ['client-monthly-stats', podId, monthCount],
+    queryFn: async () => {
+      if (!podId) return [];
+
+      const now = new Date();
+      const months: { month: number; year: number }[] = [];
+      for (let i = 0; i < monthCount; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        months.push({ month: d.getMonth(), year: d.getFullYear() });
+      }
+
+      const summaries = await Promise.all(
+        months.map(async ({ month, year }) => {
+          const start = new Date(year, month, 1).toISOString();
+          const end = new Date(year, month + 1, 1).toISOString();
+
+          const [callsResult, missedCallsResult, minutesResult, automationsResult, leadsResult] = await Promise.all([
+            supabase.from('call_logs').select('id', { count: 'exact', head: true })
+              .eq('pod_id', podId).gte('call_started_at', start).lt('call_started_at', end),
+            supabase.from('call_logs').select('id', { count: 'exact', head: true })
+              .eq('pod_id', podId).eq('call_status', 'missed').gte('call_started_at', start).lt('call_started_at', end),
+            supabase.from('call_logs').select('duration_seconds')
+              .eq('pod_id', podId).gte('call_started_at', start).lt('call_started_at', end),
+            supabase.from('automation_logs').select('id', { count: 'exact', head: true })
+              .eq('pod_id', podId).gte('created_at', start).lt('created_at', end),
+            supabase.from('leads').select('id', { count: 'exact', head: true })
+              .eq('pod_id', podId).gte('created_at', start).lt('created_at', end),
+          ]);
+
+          const totalMinutes = Math.round(
+            (minutesResult.data || []).reduce((sum, c) => sum + (c.duration_seconds || 0), 0) / 60
+          );
+
+          return {
+            month,
+            year,
+            calls: callsResult.count || 0,
+            missedCalls: missedCallsResult.count || 0,
+            totalMinutes,
+            automations: automationsResult.count || 0,
+            leads: leadsResult.count || 0,
+          };
+        })
+      );
+
+      // Return in chronological order (oldest first)
+      return summaries.reverse();
+    },
+    enabled: !!podId,
+  });
+}
+
+// Fetch Google Sheet URLs from active Retell accounts for a pod
+export function useRetellGoogleSheets(podId: string | undefined) {
+  return useQuery({
+    queryKey: ['retell-google-sheets', podId],
+    queryFn: async () => {
+      if (!podId) return [];
+
+      const { data, error } = await supabase
+        .from('retell_accounts')
+        .select('id, label, google_sheet_url')
+        .eq('pod_id', podId)
+        .eq('is_active', true)
+        .not('google_sheet_url', 'is', null);
+
+      if (error) throw error;
+      return data as { id: string; label: string; google_sheet_url: string }[];
+    },
+    enabled: !!podId,
+  });
+}
+
 // Delete retell account mutation
 export function useDeleteRetellAccount() {
   const queryClient = useQueryClient();
@@ -1693,6 +1769,7 @@ export function useSendDirectMessage() {
 export function useUnreadMessageCount() {
   return useQuery({
     queryKey: ['unread-message-count'],
+    retry: false,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return 0;
@@ -1703,7 +1780,10 @@ export function useUnreadMessageCount() {
         .eq('recipient_id', user.id)
         .eq('read', false);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching unread count:', error);
+        return 0;
+      }
       return count || 0;
     },
   });
@@ -1713,6 +1793,7 @@ export function useUnreadMessageCount() {
 export function useAdminConversations() {
   return useQuery({
     queryKey: ['admin-conversations'],
+    retry: false,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -1724,8 +1805,11 @@ export function useAdminConversations() {
         .or(`sender_id.eq.${user.id},recipient_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      if (!messages) return [];
+      if (error) {
+        console.error('Error fetching conversations:', error);
+        throw error;
+      }
+      if (!messages || messages.length === 0) return [];
 
       // Group by pod_id, take latest message per pod
       const podMap = new Map<string, any>();

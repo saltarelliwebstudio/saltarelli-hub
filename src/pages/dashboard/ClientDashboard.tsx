@@ -1,10 +1,11 @@
-import { Phone, Clock, Zap, CheckCircle, XCircle } from 'lucide-react';
+import { Phone, Clock, Zap, CheckCircle, XCircle, FileSpreadsheet, ExternalLink } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { StatCard } from '@/components/ui/stat-card';
 import { ActivityFeed, ActivityItem } from '@/components/ui/activity-feed';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useMyPod, useClientStats, useCallLogs, useAutomationLogs, PodWithSettings } from '@/hooks/useSupabaseData';
+import { useMyPod, useClientStats, useCallLogs, useAutomationLogs, useRetellGoogleSheets, PodWithSettings } from '@/hooks/useSupabaseData';
+import { Button } from '@/components/ui/button';
 
 interface ViewAsClientContext {
   pod: PodWithSettings;
@@ -26,6 +27,7 @@ export default function ClientDashboard() {
   const { data: stats, isLoading: statsLoading } = useClientStats(podId);
   const { data: recentCalls } = useCallLogs(podId, { limit: 5 });
   const { data: recentAutomations } = useAutomationLogs(podId, { limit: 5 });
+  const { data: googleSheets } = useRetellGoogleSheets(podId);
 
   const voiceEnabled = pod?.pod_settings?.voice_enabled;
   const automationsEnabled = pod?.pod_settings?.automations_enabled;
@@ -69,7 +71,7 @@ export default function ClientDashboard() {
     return (
       <div className="space-y-6 animate-fade-in">
         <Skeleton className="h-8 w-64" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Skeleton className="h-[120px] rounded-xl" />
           <Skeleton className="h-[120px] rounded-xl" />
           <Skeleton className="h-[120px] rounded-xl" />
@@ -99,7 +101,7 @@ export default function ClientDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {statsLoading ? (
           <>
             <Skeleton className="h-[120px] rounded-xl" />
@@ -157,6 +159,35 @@ export default function ClientDashboard() {
           </>
         )}
       </div>
+
+      {/* Call Log Sheets */}
+      {googleSheets && googleSheets.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileSpreadsheet className="h-5 w-5 text-green-500" />
+              Call Log Sheets
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {googleSheets.map((sheet) => (
+                <a
+                  key={sheet.id}
+                  href={sheet.google_sheet_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    {sheet.label}
+                  </Button>
+                </a>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Activity */}
       <Card>

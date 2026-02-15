@@ -244,6 +244,7 @@ export default function AdminAnalytics() {
           ) : !monthPodStats || monthPodStats.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No clients yet.</p>
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -264,6 +265,7 @@ export default function AdminAnalytics() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -298,7 +300,7 @@ export default function AdminAnalytics() {
           ) : filteredHistory.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No matching months found.</p>
           ) : (
-            <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {filteredHistory.map((s) => {
                 const isSelected = s.month === selectedMonth.month && s.year === selectedMonth.year;
                 const hasData = s.calls > 0 || s.automations > 0 || s.leads > 0;

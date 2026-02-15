@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 
 export default function AdminMessages() {
   const { userWithRole } = useAuth();
-  const { data: conversations, isLoading } = useAdminConversations();
+  const { data: conversations, isLoading, error } = useAdminConversations();
   const [selectedConversation, setSelectedConversation] = useState<{
     podId: string;
     otherUserId: string;
@@ -57,6 +57,14 @@ export default function AdminMessages() {
         <div className="space-y-3">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 rounded-lg" />)}
         </div>
+      ) : error ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <MessageSquare className="h-10 w-10 text-destructive/40 mb-3" />
+            <p className="text-destructive font-medium">Failed to load messages</p>
+            <p className="text-sm text-muted-foreground mt-1">{(error as Error).message}</p>
+          </CardContent>
+        </Card>
       ) : !conversations || conversations.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
