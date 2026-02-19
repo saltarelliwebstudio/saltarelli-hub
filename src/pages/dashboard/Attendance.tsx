@@ -2,23 +2,42 @@ import { useOutletContext } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { useMyPod, PodWithSettings } from '@/hooks/useSupabaseData';
+import { Progress } from '@/components/ui/progress';
+import { useMyPod, useStrikingProgress, useStrikingAttendanceLog, PodWithSettings } from '@/hooks/useSupabaseData';
 import { useAuth } from '@/contexts/AuthContext';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { CalendarCheck, Users, TrendingUp, Clock } from 'lucide-react';
+import { Trophy, Flame, Target, Swords, CalendarCheck, TrendingUp } from 'lucide-react';
 
 interface ViewAsClientContext {
   pod: PodWithSettings;
   isViewAsClient: boolean;
 }
 
-interface AttendanceRow {
-  id: string;
-  member_name: string;
-  class_name: string;
-  check_in_at: string;
-}
+const TIER_CONFIG = {
+  basics: {
+    label: 'Basics',
+    color: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    icon: Target,
+    gradient: 'from-blue-600 to-blue-400',
+    nextTier: 'Advanced Striking',
+    classesNeeded: 20,
+  },
+  advanced: {
+    label: 'Advanced Striking',
+    color: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+    icon: Swords,
+    gradient: 'from-orange-600 to-amber-400',
+    nextTier: 'Sparring Eligible',
+    classesNeeded: 30,
+  },
+  sparring: {
+    label: 'Sparring Eligible',
+    color: 'bg-red-500/20 text-red-400 border-red-500/30',
+    icon: Trophy,
+    gradient: 'from-red-600 to-rose-400',
+    nextTier: null,
+    classesNeeded: null,
+  },
+};
 
 export default function Attendance() {
   const { userWithRole } = useAuth();
@@ -28,79 +47,124 @@ export default function Attendance() {
   const { data: myPod, isLoading: podLoading } = useMyPod();
   const pod = isViewAsClient ? viewAsPod : myPod;
 
-  const { data: attendance, isLoading: attendanceLoading } = useQuery({
-    queryKey: ['zen-attendance', pod?.id],
-    queryFn: async () => {
-      if (!pod?.id) return [];
-      const { data, error } = await supabase
-        .from('zen_planner_attendance' as any)
-        .select('*')
-        .eq('pod_id', pod.id)
-        .order('check_in_at', { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return (data || []) as unknown as AttendanceRow[];
-    },
-    enabled: !!pod?.id,
-  });
+  const userId = pod?.owner_id || userWithRole?.id;
+  const { data: progress, isLoading: progressLoading } = useStrikingProgress(pod?.id, userId);
+  const { data: attendanceLog, isLoading: logLoading } = useStrikingAttendanceLog(pod?.id, userId);
 
-  const isLoading = podLoading || attendanceLoading;
-
-  // Compute stats
-  const totalCheckins = attendance?.length || 0;
-  const uniqueMembers = new Set(attendance?.map((a) => a.member_name) || []).size;
-
-  // Group by date for recent activity
-  const byDate: Record<string, AttendanceRow[]> = {};
-  (attendance || []).forEach((a) => {
-    const date = new Date(a.check_in_at).toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
-    if (!byDate[date]) byDate[date] = [];
-    byDate[date].push(a);
-  });
-
-  // Top classes
-  const classCounts: Record<string, number> = {};
-  (attendance || []).forEach((a) => {
-    classCounts[a.class_name] = (classCounts[a.class_name] || 0) + 1;
-  });
-  const topClasses = Object.entries(classCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+  const isLoading = podLoading || progressLoading || logLoading;
 
   if (isLoading) {
     return (
       <div className="space-y-6 animate-fade-in">
-        <div>
-          <Skeleton className="h-9 w-48 mb-2" />
-          <Skeleton className="h-5 w-72" />
+        <Skeleton className="h-9 w-48 mb-2" />
+        <Skeleton className="h-5 w-72" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-        </div>
-        <Skeleton className="h-[400px]" />
+        <Skeleton className="h-[300px]" />
       </div>
     );
   }
 
-  const hasData = totalCheckins > 0;
+  // No progress record yet
+  if (!progress) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Progress</h1>
+          <p className="text-muted-foreground">Your striking progression journey</p>
+        </div>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="rounded-full bg-gradient-to-br from-blue-600 to-blue-400 p-5 mb-6 shadow-lg shadow-blue-500/20">
+                <Target className="h-10 w-10 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold mb-2">Welcome to Striking!</h3>
+              <p className="text-muted-foreground max-w-md text-base">
+                Your progression tracking starts once your coach marks your first class.
+                Keep showing up — every class counts toward your next tier!
+              </p>
+              <div className="flex gap-6 mt-8">
+                {Object.entries(TIER_CONFIG).map(([key, cfg]) => (
+                  <div key={key} className="flex flex-col items-center gap-2">
+                    <div className={`rounded-full p-3 bg-gradient-to-br ${cfg.gradient} shadow-md`}>
+                      <cfg.icon className="h-5 w-5 text-white" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{cfg.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const tier = (progress.current_tier as keyof typeof TIER_CONFIG) || 'basics';
+  const tierCfg = TIER_CONFIG[tier];
+  const TierIcon = tierCfg.icon;
+  const classesAttended = progress.striking_classes_attended || 0;
+  const currentStreak = progress.current_streak || 0;
+  const longestStreak = progress.longest_streak || 0;
+
+  // Progress to next tier
+  let progressPercent = 100;
+  let progressLabel = 'Max tier reached!';
+  if (tierCfg.classesNeeded) {
+    progressPercent = Math.min((classesAttended / tierCfg.classesNeeded) * 100, 100);
+    progressLabel = `${classesAttended} / ${tierCfg.classesNeeded} classes to ${tierCfg.nextTier}`;
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Attendance</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Progress</h1>
         <p className="text-muted-foreground">
-          {pod?.name ? `${pod.name} — Check-in history` : 'Check-in history'}
+          {pod?.name ? `${pod.name} — Striking progression` : 'Your striking progression'}
         </p>
       </div>
 
-      {/* Stats cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      {/* Tier Hero Card */}
+      <Card className="overflow-hidden border-0">
+        <div className={`bg-gradient-to-r ${tierCfg.gradient} p-6 sm:p-8`}>
+          <div className="flex items-center gap-4">
+            <div className="rounded-full bg-white/20 backdrop-blur-sm p-4 shadow-lg">
+              <TierIcon className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <p className="text-white/80 text-sm font-medium uppercase tracking-wider">Current Tier</p>
+              <h2 className="text-3xl font-bold text-white">{tierCfg.label}</h2>
+              {progress.tier_override && (
+                <Badge variant="outline" className="mt-1 border-white/30 text-white/80 text-xs">
+                  Coach Override
+                </Badge>
+              )}
+            </div>
+          </div>
+          {tierCfg.classesNeeded && (
+            <div className="mt-6">
+              <div className="flex justify-between text-sm text-white/80 mb-2">
+                <span>{progressLabel}</span>
+                <span>{Math.round(progressPercent)}%</span>
+              </div>
+              <div className="h-3 bg-white/20 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-white rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -108,8 +172,8 @@ export default function Attendance() {
                 <CalendarCheck className="h-5 w-5 text-accent" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{totalCheckins}</p>
-                <p className="text-sm text-muted-foreground">Total Check-ins</p>
+                <p className="text-2xl font-bold">{classesAttended}</p>
+                <p className="text-sm text-muted-foreground">Classes Attended</p>
               </div>
             </div>
           </CardContent>
@@ -117,12 +181,12 @@ export default function Attendance() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="rounded-full bg-accent/10 p-3">
-                <Users className="h-5 w-5 text-accent" />
+              <div className="rounded-full bg-orange-500/10 p-3">
+                <Flame className="h-5 w-5 text-orange-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{uniqueMembers}</p>
-                <p className="text-sm text-muted-foreground">Unique Members</p>
+                <p className="text-2xl font-bold">{currentStreak} <span className="text-base font-normal text-muted-foreground">wk</span></p>
+                <p className="text-sm text-muted-foreground">Current Streak</p>
               </div>
             </div>
           </CardContent>
@@ -130,97 +194,52 @@ export default function Attendance() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
-              <div className="rounded-full bg-accent/10 p-3">
-                <TrendingUp className="h-5 w-5 text-accent" />
+              <div className="rounded-full bg-purple-500/10 p-3">
+                <TrendingUp className="h-5 w-5 text-purple-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{topClasses[0]?.[0] || '—'}</p>
-                <p className="text-sm text-muted-foreground">Most Popular Class</p>
+                <p className="text-2xl font-bold">{longestStreak} <span className="text-base font-normal text-muted-foreground">wk</span></p>
+                <p className="text-sm text-muted-foreground">Longest Streak</p>
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {!hasData ? (
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="rounded-full bg-muted p-4 mb-4">
-                <CalendarCheck className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-semibold mb-2">No attendance data yet</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                Attendance data syncs automatically from Zen Planner throughout the day.
-                Check back soon!
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Top classes */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Top Classes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {topClasses.map(([cls, count], i) => (
-                <div key={cls} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs w-6 justify-center">
-                      {i + 1}
-                    </Badge>
-                    <span className="text-sm font-medium">{cls}</span>
+      {/* Attendance History */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Recent Attendance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {(!attendanceLog || attendanceLog.length === 0) ? (
+            <p className="text-sm text-muted-foreground text-center py-8">No attendance records yet.</p>
+          ) : (
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+              {attendanceLog.map((entry: any) => (
+                <div key={entry.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-full bg-accent/10 p-2">
+                      <CalendarCheck className="h-4 w-4 text-accent" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium">{entry.class_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(entry.attended_at).toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-sm text-muted-foreground">{count}</span>
                 </div>
               ))}
-            </CardContent>
-          </Card>
-
-          {/* Recent check-ins */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-base">Recent Check-ins</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                {Object.entries(byDate).slice(0, 10).map(([date, records]) => (
-                  <div key={date}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className="text-sm font-semibold">{date}</h4>
-                      <Badge variant="secondary" className="text-xs">{records.length}</Badge>
-                    </div>
-                    <div className="space-y-1 pl-2 border-l-2 border-border">
-                      {records.slice(0, 10).map((r) => (
-                        <div key={r.id} className="flex items-center justify-between py-1">
-                          <span className="text-sm">{r.member_name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">{r.class_name}</span>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {new Date(r.check_in_at).toLocaleTimeString('en-US', {
-                                hour: 'numeric',
-                                minute: '2-digit',
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      {records.length > 10 && (
-                        <p className="text-xs text-muted-foreground py-1">
-                          +{records.length - 10} more
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

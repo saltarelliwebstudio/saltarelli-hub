@@ -66,7 +66,7 @@ const clientNavItems: NavItem[] = [
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, requiresModule: 'analytics' },
   { label: 'Billing', href: '/dashboard/billing', icon: CreditCard, requiresModule: 'billing' },
   { label: 'Schedule', href: '/dashboard/schedule', icon: CalendarDays, requiresModule: 'zen_planner' },
-  { label: 'Attendance', href: '/dashboard/attendance', icon: CalendarCheck, requiresModule: 'zen_planner' },
+  { label: 'Progress', href: '/dashboard/attendance', icon: CalendarCheck, requiresModule: 'zen_planner' },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 

@@ -17,6 +17,7 @@ import {
   Clock,
   BarChart3,
   Globe,
+  Trophy,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
@@ -300,6 +301,10 @@ export default function ClientDetail() {
           <Button variant="outline" onClick={() => setResetPasswordModalOpen(true)}>
             <Key className="mr-2 h-4 w-4" />
             Reset Password
+          </Button>
+          <Button variant="outline" onClick={() => navigate(`/admin/clients/${podId}/progress`)}>
+            <Trophy className="mr-2 h-4 w-4" />
+            Member Progress
           </Button>
           <Button className="gradient-orange text-white" onClick={handleViewAsClient}>
             <Eye className="mr-2 h-4 w-4" />

@@ -1920,6 +1920,144 @@ export function useUnreadMessageSubscription() {
   }, [queryClient]);
 }
 
+// ─── Striking Progression Hooks ───────────────────────────────────
+
+export function useStrikingProgress(podId: string | undefined, userId: string | undefined) {
+  return useQuery({
+    queryKey: ['striking-progress', podId, userId],
+    queryFn: async () => {
+      if (!podId || !userId) return null;
+      const { data, error } = await supabase
+        .from('striking_progress' as any)
+        .select('*')
+        .eq('pod_id', podId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (error) throw error;
+      return data as any;
+    },
+    enabled: !!podId && !!userId,
+  });
+}
+
+export function useStrikingAttendanceLog(podId: string | undefined, userId: string | undefined) {
+  return useQuery({
+    queryKey: ['striking-attendance-log', podId, userId],
+    queryFn: async () => {
+      if (!podId || !userId) return [];
+      const { data, error } = await supabase
+        .from('striking_attendance_log' as any)
+        .select('*')
+        .eq('pod_id', podId)
+        .eq('user_id', userId)
+        .order('attended_at', { ascending: false });
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    enabled: !!podId && !!userId,
+  });
+}
+
+export function useAllMemberProgress(podId: string | undefined) {
+  return useQuery({
+    queryKey: ['all-member-progress', podId],
+    queryFn: async () => {
+      if (!podId) return [];
+      const { data, error } = await supabase
+        .from('striking_progress' as any)
+        .select('*')
+        .eq('pod_id', podId)
+        .order('striking_classes_attended', { ascending: false });
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+    enabled: !!podId,
+  });
+}
+
+export function useMarkAttendance() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ podId, userId, className, attendedAt, markedBy }: {
+      podId: string; userId: string; className: string; attendedAt: string; markedBy: string;
+    }) => {
+      // Insert attendance log
+      const { error: logError } = await supabase
+        .from('striking_attendance_log' as any)
+        .insert({ pod_id: podId, user_id: userId, class_name: className, attended_at: attendedAt, marked_by: markedBy });
+      if (logError) throw logError;
+
+      // Upsert striking_progress
+      const { data: existing } = await supabase
+        .from('striking_progress' as any)
+        .select('*')
+        .eq('pod_id', podId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (existing) {
+        const { error } = await supabase
+          .from('striking_progress' as any)
+          .update({
+            striking_classes_attended: (existing as any).striking_classes_attended + 1,
+            last_class_date: attendedAt,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', (existing as any).id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('striking_progress' as any)
+          .insert({
+            pod_id: podId,
+            user_id: userId,
+            striking_classes_attended: 1,
+            current_tier: 'basics',
+            tier_override: false,
+            current_streak: 1,
+            longest_streak: 1,
+            last_class_date: attendedAt,
+          });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['striking-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['striking-attendance-log'] });
+      queryClient.invalidateQueries({ queryKey: ['all-member-progress'] });
+      toast({ title: 'Attendance marked!' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error marking attendance', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
+export function useUpdateMemberTier() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ progressId, tier }: { progressId: string; tier: string }) => {
+      const { error } = await supabase
+        .from('striking_progress' as any)
+        .update({ current_tier: tier, tier_override: true, updated_at: new Date().toISOString() })
+        .eq('id', progressId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['striking-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['all-member-progress'] });
+      toast({ title: 'Tier updated!' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Error updating tier', description: error.message, variant: 'destructive' });
+    },
+  });
+}
+
 // Fetch Zen Planner attendance data from client_analytics_data
 export function useZenPlannerAttendance(
   clientId: string | undefined,
