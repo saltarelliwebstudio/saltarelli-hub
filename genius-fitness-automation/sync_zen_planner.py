@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 app = modal.App("zen-planner-sync")
 
 image = modal.Image.debian_slim(python_version="3.11").pip_install(
-    "requests", "supabase", "fastapi"
+    "requests", "supabase"
 )
 
 
