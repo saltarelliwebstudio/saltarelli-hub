@@ -36,9 +36,15 @@ const SETTING_GROUPS = [
     icon: '⚡',
     keys: ['modal_api_url', 'modal_auth_token'],
   },
+  {
+    title: 'Zen Planner',
+    description: 'Attendance and member management integration for gym clients',
+    icon: '🏋️',
+    keys: ['zen_planner_subdomain', 'zen_planner_username', 'zen_planner_password'],
+  },
 ];
 
-const SENSITIVE_KEYS = ['retell_default_api_key', 'twilio_auth_token', 'modal_auth_token'];
+const SENSITIVE_KEYS = ['retell_default_api_key', 'twilio_auth_token', 'modal_auth_token', 'zen_planner_password'];
 
 function useIntegrationSettings() {
   return useQuery({

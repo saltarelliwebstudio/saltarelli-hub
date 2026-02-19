@@ -33,6 +33,8 @@ import Billing from "@/pages/dashboard/Billing";
 import ClientSettings from "@/pages/dashboard/ClientSettings";
 import Analytics from "@/pages/dashboard/Analytics";
 import Website from "@/pages/dashboard/Website";
+import Schedule from "@/pages/dashboard/Schedule";
+import Attendance from "@/pages/dashboard/Attendance";
 
 const queryClient = new QueryClient();
 
@@ -99,6 +101,8 @@ const App = () => (
               <Route path="/dashboard/website" element={<Website />} />
               <Route path="/dashboard/analytics" element={<Analytics />} />
               <Route path="/dashboard/billing" element={<Billing />} />
+              <Route path="/dashboard/schedule" element={<Schedule />} />
+              <Route path="/dashboard/attendance" element={<Attendance />} />
               <Route path="/dashboard/settings" element={<ClientSettings />} />
             </Route>
 

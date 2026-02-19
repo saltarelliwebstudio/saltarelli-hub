@@ -1919,3 +1919,35 @@ export function useUnreadMessageSubscription() {
     };
   }, [queryClient]);
 }
+
+// Fetch Zen Planner attendance data from client_analytics_data
+export function useZenPlannerAttendance(
+  clientId: string | undefined,
+  dateRange?: { start: Date; end: Date }
+) {
+  return useQuery({
+    queryKey: ['zen-planner-attendance', clientId, dateRange],
+    queryFn: async () => {
+      if (!clientId) return [];
+
+      let query = supabase
+        .from('client_analytics_data')
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('source_type', 'zen_planner')
+        .order('period_start', { ascending: false });
+
+      if (dateRange?.start) {
+        query = query.gte('period_start', dateRange.start.toISOString());
+      }
+      if (dateRange?.end) {
+        query = query.lte('period_end', dateRange.end.toISOString());
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!clientId,
+  });
+}

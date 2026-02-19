@@ -443,6 +443,7 @@ export type Database = {
           website_enabled: boolean
           website_url: string | null
           google_sheet_url: string | null
+          zen_planner_enabled: boolean
         }
         Insert: {
           analytics_enabled?: boolean
@@ -457,6 +458,7 @@ export type Database = {
           website_enabled?: boolean
           website_url?: string | null
           google_sheet_url?: string | null
+          zen_planner_enabled?: boolean
         }
         Update: {
           analytics_enabled?: boolean
@@ -471,6 +473,7 @@ export type Database = {
           website_enabled?: boolean
           website_url?: string | null
           google_sheet_url?: string | null
+          zen_planner_enabled?: boolean
         }
         Relationships: [
           {

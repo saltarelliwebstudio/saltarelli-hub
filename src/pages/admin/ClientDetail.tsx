@@ -206,7 +206,7 @@ export default function ClientDetail() {
     setNewPassword('');
   };
 
-  const handleToggleModule = async (module: 'voice_enabled' | 'automations_enabled' | 'analytics_enabled' | 'website_enabled', value: boolean) => {
+  const handleToggleModule = async (module: 'voice_enabled' | 'automations_enabled' | 'analytics_enabled' | 'website_enabled' | 'zen_planner_enabled', value: boolean) => {
     if (!podId) return;
     await updatePodSettings.mutateAsync({ podId, updates: { [module]: value } });
   };
@@ -879,6 +879,17 @@ export default function ClientDetail() {
                   </div>
                 </div>
               )}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium">Zen Planner</p>
+                  <p className="text-sm text-muted-foreground">Enable Zen Planner attendance data in the Analytics tab</p>
+                </div>
+                <Switch
+                  checked={pod.pod_settings?.zen_planner_enabled || false}
+                  onCheckedChange={(checked) => handleToggleModule('zen_planner_enabled', checked)}
+                  disabled={updatePodSettings.isPending}
+                />
+              </div>
             </CardContent>
           </Card>
 

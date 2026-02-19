@@ -34,6 +34,8 @@ import {
   ChevronLeft,
   Globe,
   MessageSquare,
+  CalendarDays,
+  CalendarCheck,
 } from 'lucide-react';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import logo from '@/assets/logo.png';
@@ -43,7 +45,7 @@ interface NavItem {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   adminOnly?: boolean;
-  requiresModule?: 'voice' | 'automations' | 'billing' | 'analytics' | 'website';
+  requiresModule?: 'voice' | 'automations' | 'billing' | 'analytics' | 'website' | 'zen_planner';
 }
 
 const adminNavItems: NavItem[] = [
@@ -63,6 +65,8 @@ const clientNavItems: NavItem[] = [
   { label: 'Website', href: '/dashboard/website', icon: Globe, requiresModule: 'website' },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3, requiresModule: 'analytics' },
   { label: 'Billing', href: '/dashboard/billing', icon: CreditCard, requiresModule: 'billing' },
+  { label: 'Schedule', href: '/dashboard/schedule', icon: CalendarDays, requiresModule: 'zen_planner' },
+  { label: 'Attendance', href: '/dashboard/attendance', icon: CalendarCheck, requiresModule: 'zen_planner' },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 
@@ -104,6 +108,9 @@ export default function DashboardLayout() {
       }
       if (item.requiresModule === 'website') {
         return myPod.pod_settings.website_enabled;
+      }
+      if (item.requiresModule === 'zen_planner') {
+        return myPod.pod_settings.zen_planner_enabled;
       }
       return true;
     });
