@@ -22,7 +22,6 @@ import AdminAnalytics from "@/pages/admin/AdminAnalytics";
 import IntegrationSettings from "@/pages/admin/IntegrationSettings";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminMessages from "@/pages/admin/AdminMessages";
-import MemberProgress from "@/pages/admin/MemberProgress";
 
 // Client Pages
 import ClientDashboard from "@/pages/dashboard/ClientDashboard";
@@ -66,7 +65,6 @@ const App = () => (
               <Route path="/admin/clients" element={<ClientsList />} />
               <Route path="/admin/clients/:podId" element={<ClientDetail />} />
               <Route path="/admin/messages" element={<AdminMessages />} />
-              <Route path="/admin/clients/:podId/progress" element={<MemberProgress />} />
               <Route path="/admin/analytics" element={<AdminAnalytics />} />
               <Route path="/admin/integrations" element={<IntegrationSettings />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
