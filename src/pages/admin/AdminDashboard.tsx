@@ -1,15 +1,18 @@
-import { Users, Phone, Zap, Bot } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Users, Phone, Zap, Bot, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { ActivityFeed, ActivityItem } from '@/components/ui/activity-feed';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAdminStats, useAllCallLogs, useAllAutomationLogs } from '@/hooks/useSupabaseData';
+import { useAdminStats, useAllCallLogs, useAllAutomationLogs, useAdminFollowupsDue } from '@/hooks/useSupabaseData';
 import { formatDistanceToNow } from 'date-fns';
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   const { data: stats, isLoading: statsLoading } = useAdminStats();
   const { data: recentCalls, isLoading: callsLoading } = useAllCallLogs({ limit: 5 });
   const { data: recentAutomations, isLoading: automationsLoading } = useAllAutomationLogs({ limit: 5 });
+  const { data: followupsDue, isLoading: followupsLoading } = useAdminFollowupsDue();
 
   // Combine and sort recent activity
   const recentActivity: ActivityItem[] = [
@@ -83,6 +86,35 @@ export default function AdminDashboard() {
           </>
         )}
       </div>
+
+      {/* Follow-Up Banner */}
+      {!followupsLoading && (
+        followupsDue && followupsDue.length > 0 ? (
+          <Card
+            className="border-orange-500/30 bg-orange-500/5 cursor-pointer hover:bg-orange-500/10 transition-colors"
+            onClick={() => navigate('/admin/leads')}
+          >
+            <CardContent className="flex items-center gap-3 py-4">
+              <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-orange-500">
+                  {followupsDue.length} follow-up{followupsDue.length !== 1 ? 's' : ''} due
+                </p>
+                <p className="text-sm text-muted-foreground truncate">
+                  {followupsDue.map(l => l.name).join(', ')}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="border-green-500/30 bg-green-500/5">
+            <CardContent className="flex items-center gap-3 py-4">
+              <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+              <p className="text-sm text-green-500 font-medium">All caught up — no follow-ups due</p>
+            </CardContent>
+          </Card>
+        )
+      )}
 
       {/* Recent Activity */}
       <Card>

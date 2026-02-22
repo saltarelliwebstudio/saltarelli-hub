@@ -5,6 +5,23 @@ import { useToast } from '@/hooks/use-toast';
 import type { Tables } from '@/integrations/supabase/types';
 
 export type Pod = Tables<'pods'>;
+
+export interface AdminLead {
+  id: string;
+  name: string;
+  business_name: string | null;
+  phone: string | null;
+  email: string | null;
+  source: string | null;
+  service_interest: string | null;
+  status: 'cold' | 'warm' | 'hot' | 'followed_up' | 'closed' | 'client';
+  notes: string | null;
+  last_contacted_date: string | null;
+  next_followup_date: string | null;
+  followup_date: string | null;
+  date_added: string;
+  created_at: string;
+}
 export type PodSettings = Tables<'pod_settings'>;
 export type CallLog = Tables<'call_logs'>;
 export type AutomationLog = Tables<'automation_logs'>;
@@ -1918,6 +1935,144 @@ export function useUnreadMessageSubscription() {
       supabase.removeChannel(channel);
     };
   }, [queryClient]);
+}
+
+// --- Admin Leads Hooks ---
+
+// Fetch all admin leads
+export function useAdminLeads() {
+  return useQuery({
+    queryKey: ['admin-leads'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('admin_leads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return data as AdminLead[];
+    },
+  });
+}
+
+// Create admin lead mutation
+export function useCreateAdminLead() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: Omit<AdminLead, 'id' | 'created_at' | 'date_added'> & { date_added?: string }) => {
+      const { data: result, error } = await supabase
+        .from('admin_leads')
+        .insert(data)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result as AdminLead;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-followups-due'] });
+      toast({
+        title: 'Lead added',
+        description: 'The lead has been created successfully.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to add lead',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Update admin lead mutation
+export function useUpdateAdminLead() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<AdminLead> }) => {
+      const { data, error } = await supabase
+        .from('admin_leads')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as AdminLead;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-followups-due'] });
+      toast({
+        title: 'Lead updated',
+        description: 'The lead has been updated successfully.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update lead',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Delete admin lead mutation
+export function useDeleteAdminLead() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('admin_leads')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-leads'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-followups-due'] });
+      toast({
+        title: 'Lead deleted',
+        description: 'The lead has been removed.',
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to delete lead',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+}
+
+// Fetch admin leads with follow-ups due today or overdue
+export function useAdminFollowupsDue() {
+  return useQuery({
+    queryKey: ['admin-followups-due'],
+    queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase
+        .from('admin_leads')
+        .select('*')
+        .lte('next_followup_date', today)
+        .not('status', 'in', '("closed","client")')
+        .order('next_followup_date', { ascending: true });
+
+      if (error) throw error;
+      return data as AdminLead[];
+    },
+  });
 }
 
 // Fetch Zen Planner attendance data from client_analytics_data

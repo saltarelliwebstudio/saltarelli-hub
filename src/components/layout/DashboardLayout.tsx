@@ -36,6 +36,7 @@ import {
   MessageSquare,
   CalendarDays,
   CalendarCheck,
+  ContactRound,
 } from 'lucide-react';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import logo from '@/assets/logo.png';
@@ -51,6 +52,7 @@ interface NavItem {
 const adminNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Clients', href: '/admin/clients', icon: Users },
+  { label: 'Leads', href: '/admin/leads', icon: ContactRound },
   { label: 'Messages', href: '/admin/messages', icon: MessageSquare },
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { label: 'Integrations', href: '/admin/integrations', icon: Plug },
