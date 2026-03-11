@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, ContactRound, AlertCircle, Search, PhoneCall, Trash2, Users, MessageSquare, MessageCircleReply, CalendarCheck, Trophy } from 'lucide-react';
+import { Plus, Pencil, ContactRound, AlertCircle, Search, PhoneCall, Trash2, Users, MessageSquare, MessageCircleReply, CalendarCheck, Trophy, Pause } from 'lucide-react';
 import { format, isBefore, startOfDay, subDays, isAfter } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -35,7 +35,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useAdminLeads, useAdminFollowupsDue, useUpdateAdminLead, useDeleteAdminLead, type AdminLead } from '@/hooks/useSupabaseData';
+import { Switch } from '@/components/ui/switch';
+import { useAdminLeads, useAdminFollowupsDue, useUpdateAdminLead, useDeleteAdminLead, useToggleLeadDrip, type AdminLead } from '@/hooks/useSupabaseData';
 import { LeadModal } from '@/components/admin/LeadModal';
 import { cn } from '@/lib/utils';
 
@@ -126,6 +127,7 @@ export default function AdminLeads() {
   const { data: followupsDue } = useAdminFollowupsDue();
   const updateLead = useUpdateAdminLead();
   const deleteLead = useDeleteAdminLead();
+  const toggleDrip = useToggleLeadDrip();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<AdminLead | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -330,6 +332,7 @@ export default function AdminLeads() {
               <TableHead>Source</TableHead>
               <TableHead>Service Interest</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Drip</TableHead>
               <TableHead>Date Added</TableHead>
               <TableHead>Last Contacted</TableHead>
               <TableHead>Next Follow-Up</TableHead>
@@ -346,6 +349,7 @@ export default function AdminLeads() {
                   <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
@@ -354,7 +358,7 @@ export default function AdminLeads() {
               ))
             ) : !filteredLeads || filteredLeads.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="h-24 text-center">
+                <TableCell colSpan={11} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <ContactRound className="h-8 w-8 text-muted-foreground" />
                     <p className="text-muted-foreground">
@@ -397,6 +401,58 @@ export default function AdminLeads() {
                       )}
                     </div>
                   </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {lead.status !== 'client' && lead.status !== 'closed' && lead.status !== 'do_not_contact' ? (
+                        <>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div>
+                                <Switch
+                                  checked={lead.drip_active && !lead.drip_paused_at}
+                                  onCheckedChange={(checked) => {
+                                    if (!lead.drip_active) {
+                                      toggleDrip.mutate({ id: lead.id, drip_active: true });
+                                    } else if (checked) {
+                                      toggleDrip.mutate({ id: lead.id, pause: false });
+                                    } else {
+                                      toggleDrip.mutate({ id: lead.id, pause: true });
+                                    }
+                                  }}
+                                  disabled={!lead.phone}
+                                />
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {!lead.phone
+                                ? 'Add phone number to enable drip'
+                                : lead.drip_paused_at
+                                  ? 'Resume drip'
+                                  : lead.drip_active
+                                    ? 'Pause drip'
+                                    : 'Start drip campaign'}
+                            </TooltipContent>
+                          </Tooltip>
+                          {lead.drip_active && (
+                            <Badge variant="outline" className={cn(
+                              'text-xs tabular-nums',
+                              lead.drip_paused_at
+                                ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20'
+                                : 'bg-green-500/10 text-green-500 border-green-500/20'
+                            )}>
+                              {lead.drip_paused_at ? (
+                                <><Pause className="h-3 w-3 mr-0.5" />{lead.drip_step}/7</>
+                              ) : (
+                                <>{lead.drip_step}/7</>
+                              )}
+                            </Badge>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">{'\u2014'}</span>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {formatDate(lead.date_added)}
                   </TableCell>
@@ -408,7 +464,7 @@ export default function AdminLeads() {
                       <span
                         className={cn(
                           'text-sm',
-                          isOverdue(lead.next_followup_date) && lead.status !== 'closed' && lead.status !== 'client'
+                          isOverdue(lead.next_followup_date) && lead.status !== 'client'
                             ? 'text-red-500 font-medium'
                             : 'text-muted-foreground'
                         )}
