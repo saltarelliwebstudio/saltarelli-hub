@@ -14,7 +14,7 @@ export interface AdminLead {
   email: string | null;
   source: string | null;
   service_interest: string | null;
-  status: 'cold' | 'warm' | 'hot' | 'followed_up' | 'closed' | 'client';
+  status: 'cold' | 'warm' | 'hot' | 'followed_up' | 'replied' | 'demo_booked' | 'closed' | 'client' | 'do_not_contact';
   notes: string | null;
   last_contacted_date: string | null;
   next_followup_date: string | null;
@@ -2066,7 +2066,7 @@ export function useAdminFollowupsDue() {
         .from('admin_leads')
         .select('*')
         .lte('next_followup_date', today)
-        .not('status', 'in', '("closed","client")')
+        .not('status', 'in', '("closed","client","do_not_contact")')
         .order('next_followup_date', { ascending: true });
 
       if (error) throw error;

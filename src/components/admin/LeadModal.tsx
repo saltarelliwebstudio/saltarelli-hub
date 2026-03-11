@@ -54,8 +54,11 @@ const STATUS_OPTIONS = [
   { value: 'warm', label: 'Warm' },
   { value: 'hot', label: 'Hot' },
   { value: 'followed_up', label: 'Followed Up' },
+  { value: 'replied', label: 'Replied' },
+  { value: 'demo_booked', label: 'Demo Booked' },
   { value: 'closed', label: 'Closed' },
   { value: 'client', label: 'Client' },
+  { value: 'do_not_contact', label: 'Do Not Contact' },
 ] as const;
 
 type LeadStatus = AdminLead['status'];
