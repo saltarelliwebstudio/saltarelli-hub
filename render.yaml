@@ -19,3 +19,7 @@ services:
         value: postgresql://postgres.veyhxazlqekiweynjxhf:SALTARELLI0626!@aws-0-us-east-1.pooler.supabase.com:6543/postgres
       - key: NODE_ENV
         value: production
+      - key: TELEGRAM_BOT_TOKEN
+        value: "8464751379:AAH9M5oxe3EAc4-DsoR5bM6iH0OH4Mgcc4U"
+      - key: TELEGRAM_CHAT_ID
+        value: "6842515203"
