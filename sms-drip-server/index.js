@@ -21,6 +21,8 @@ import 'dotenv/config';
 import cron from 'node-cron';
 import { getSupabase } from './db.js';
 import { enrollLead, processDueMessages } from './processor.js';
+import { sendTelegram } from './telegram.js';
+import { buildDailyStatus } from './status.js';
 
 // ── Configuration ──────────────────────────────────────────────────────────
 
@@ -28,6 +30,8 @@ const SUPABASE_URL     = process.env.SUPABASE_URL;
 const SUPABASE_KEY     = process.env.SUPABASE_SERVICE_KEY;
 const OPENPHONE_KEY    = process.env.OPENPHONE_API_KEY;
 const OPENPHONE_FROM   = process.env.OPENPHONE_FROM_NUMBER;
+const TELEGRAM_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT    = process.env.TELEGRAM_CHAT_ID;
 
 if (!SUPABASE_URL || !SUPABASE_KEY || !OPENPHONE_KEY || !OPENPHONE_FROM) {
   console.error('Missing required environment variables. Check your .env file.');
@@ -104,6 +108,23 @@ function startCronScheduler() {
   });
 
   console.log('[Cron] ✓ Scheduler started – checks run at the top of every hour');
+
+  // Daily Telegram status at 7 AM ET
+  if (TELEGRAM_TOKEN && TELEGRAM_CHAT) {
+    cron.schedule('0 7 * * *', async () => {
+      console.log(`\n[Telegram] Sending daily status at ${new Date().toISOString()}`);
+      try {
+        const msg = await buildDailyStatus(supabase);
+        await sendTelegram(TELEGRAM_TOKEN, TELEGRAM_CHAT, msg);
+        console.log('[Telegram] ✓ Daily status sent');
+      } catch (err) {
+        console.error('[Telegram] Error sending daily status:', err.message);
+      }
+    }, { timezone: 'America/Toronto' });
+    console.log('[Telegram] ✓ Daily status cron scheduled – 7:00 AM ET');
+  } else {
+    console.warn('[Telegram] ⚠ TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set – daily status disabled');
+  }
 }
 
 // ── Boot-time catch-up – process any missed messages on startup ─────────────
@@ -163,6 +184,22 @@ const healthServer = http.createServer(async (req, res) => {
       recentMessages: recentLogs ?? [],
       timestamp: new Date().toISOString(),
     }));
+  } else if (req.url === '/telegram-status') {
+    // On-demand Telegram status trigger
+    if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Telegram not configured' }));
+      return;
+    }
+    try {
+      const msg = await buildDailyStatus(supabase);
+      await sendTelegram(TELEGRAM_TOKEN, TELEGRAM_CHAT, msg);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, message: 'Status sent to Telegram' }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
   } else {
     res.writeHead(404);
     res.end('Not found');
@@ -173,6 +210,7 @@ healthServer.listen(PORT, () => {
   console.log(`[Health] ✓ HTTP server listening on port ${PORT}`);
   console.log(`         GET http://localhost:${PORT}/health`);
   console.log(`         GET http://localhost:${PORT}/stats`);
+  console.log(`         GET http://localhost:${PORT}/telegram-status`);
 });
 
 // ── Graceful shutdown ───────────────────────────────────────────────────────
