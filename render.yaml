@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: saltarelli-sms-drip-server
+    runtime: node
+    rootDir: sms-drip-server
+    buildCommand: npm install
+    startCommand: node index.js
+    plan: free
+    envVars:
+      - key: SUPABASE_URL
+        value: https://veyhxazlqekiweynjxhf.supabase.co
+      - key: SUPABASE_SERVICE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZleWh4YXpscWVraXdleW5qeGhmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDYwNTYwNSwiZXhwIjoyMDg2MTgxNjA1fQ.JCslH8SIyCp4yZ2DmtZlANB92ReCnuTBEag5zY55FOM
+      - key: OPENPHONE_API_KEY
+        value: 0d35e68462200a5af5edbad35b829ead37941cddca39db448c4b202b00d81024
+      - key: OPENPHONE_PHONE_NUMBER
+        value: "+12893029451"
+      - key: DATABASE_URL
+        value: postgresql://postgres.veyhxazlqekiweynjxhf:SALTARELLI0626!@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+      - key: NODE_ENV
+        value: production
