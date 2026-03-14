@@ -29,7 +29,7 @@ import { buildDailyStatus } from './status.js';
 const SUPABASE_URL     = process.env.SUPABASE_URL;
 const SUPABASE_KEY     = process.env.SUPABASE_SERVICE_KEY;
 const OPENPHONE_KEY    = process.env.OPENPHONE_API_KEY;
-const OPENPHONE_FROM   = process.env.OPENPHONE_FROM_NUMBER;
+const OPENPHONE_FROM   = process.env.OPENPHONE_FROM_NUMBER || process.env.OPENPHONE_PHONE_NUMBER;
 const TELEGRAM_TOKEN   = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT    = process.env.TELEGRAM_CHAT_ID;
 
