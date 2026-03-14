@@ -112,9 +112,17 @@ export async function processDueMessages(supabase, apiKey, fromNumber) {
 
   console.log(`[Processor] Processing ${dueLeads.length} due lead(s)...`);
 
-  for (const lead of dueLeads) {
-    await processLeadNextMessage(supabase, lead, apiKey, fromNumber);
+  for (let i = 0; i < dueLeads.length; i++) {
+    await processLeadNextMessage(supabase, dueLeads[i], apiKey, fromNumber);
+    // Rate limit: 10-second gap between sends to avoid triggering spam filters
+    if (i < dueLeads.length - 1) {
+      await sleep(10000);
+    }
   }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
