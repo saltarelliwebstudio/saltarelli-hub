@@ -95,7 +95,7 @@ export async function getDueLeads(supabase) {
     .eq('sms_sequence_status', 'active')
     .lte('sms_next_send_date', now)
     .neq('status', 'do_not_contact')
-    .eq('sms_opt_out', false);
+    .or('sms_opt_out.eq.false,sms_opt_out.is.null');
   if (error) throw new Error(`getDueLeads: ${error.message}`);
   return data || [];
 }

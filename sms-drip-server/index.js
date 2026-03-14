@@ -159,6 +159,18 @@ const healthServer = http.createServer(async (req, res) => {
       timestamp: new Date().toISOString(),
       service: 'saltarelli-sms-drip-server',
     }));
+  } else if (req.url === '/cron') {
+    // External cron trigger – wakes Render and processes due messages
+    console.log(`[Cron] External trigger hit at ${new Date().toISOString()}`);
+    try {
+      await processDueMessages(supabase, OPENPHONE_KEY, OPENPHONE_FROM);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, timestamp: new Date().toISOString() }));
+    } catch (err) {
+      console.error('[Cron] External trigger error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: err.message }));
+    }
   } else if (req.url === '/stats') {
     // Return sequence statistics
     const { data: activeLeads } = await supabase
