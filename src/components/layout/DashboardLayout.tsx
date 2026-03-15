@@ -36,6 +36,7 @@ import {
   CalendarDays,
   CalendarCheck,
   ContactRound,
+  Wallet,
 } from 'lucide-react';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import logo from '@/assets/logo.png';
@@ -53,6 +54,7 @@ const adminNavItems: NavItem[] = [
   { label: 'Clients', href: '/admin/clients', icon: Users },
   { label: 'Leads', href: '/admin/leads', icon: ContactRound },
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
+  { label: 'Finance', href: '/admin/finance', icon: Wallet },
   { label: 'Integrations', href: '/admin/integrations', icon: Plug },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];

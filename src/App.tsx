@@ -22,6 +22,7 @@ import AdminAnalytics from "@/pages/admin/AdminAnalytics";
 import IntegrationSettings from "@/pages/admin/IntegrationSettings";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminLeads from "@/pages/admin/AdminLeads";
+import AdminFinance from "@/pages/admin/AdminFinance";
 
 // Client Pages
 import ClientDashboard from "@/pages/dashboard/ClientDashboard";
@@ -67,6 +68,7 @@ const App = () => (
               <Route path="/admin/leads" element={<AdminLeads />} />
               <Route path="/admin/analytics" element={<AdminAnalytics />} />
               <Route path="/admin/integrations" element={<IntegrationSettings />} />
+              <Route path="/admin/finance" element={<AdminFinance />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
             </Route>
 

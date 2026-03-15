@@ -11,37 +11,37 @@ const DRIP_SEQUENCE = [
   {
     step: 1,
     delayDays: 0,
-    template: `Hey [Name], Adam from Saltarelli Web Studio here in Niagara. I recently helped Zach Melnyk at Melnyk Concrete get back 5+ hours a week with a simple AI automation. Worth a quick chat?`,
+    template: `Hey [Name]! Adam from Saltarelli Web Studio here in Niagara. Recently helped Zach at Melnyk Concrete get back 5+ hrs/week with a simple AI automation. Worth a 2-second chat? Just reply and I'll send over a 60-sec video showing exactly what I mean.`,
   },
   {
     step: 2,
     delayDays: 3,
-    template: `Hey [Name], just following up — I know you're busy on the tools. If you ever want to see how other [trade] businesses are saving 5+ hours a week on admin, I'm happy to show you a quick demo. No pressure.`,
+    template: `Hey [Name], know you're busy. Just wanted you to know I'm reaching out because I genuinely think this saves you time — not just to sell you something. Zach at Melnyk Concrete said the same thing before we started 😄. Reply and I'll send you a quick video, no strings attached. - Adam`,
   },
   {
     step: 3,
     delayDays: 7,
-    template: `Hey [Name], quick thought — what if every missed call turned into a booked job automatically? That's what we set up for trades businesses like yours. Want me to show you how it works? Takes 10 min.`,
+    template: `Me waiting for you to respond 😅 — but seriously [Name], just reply and I'll shoot you a 60-sec video. That's it. - Adam`,
   },
   {
     step: 4,
     delayDays: 14,
-    template: `Hey [Name], Adam here. Just wanted to check in — still happy to show you how we help [trade] businesses cut their admin time in half. Let me know if you'd like a quick walkthrough.`,
+    template: `Hey [Name]… it's me again. Had two businesses sign on this week so I'm filling up — but I've kept a spot open with you in mind. Just reply and I'll send the video over. - Adam`,
   },
   {
     step: 5,
     delayDays: 21,
-    template: `Hey [Name], one more thought — we just helped a concrete company in Niagara automate their entire quote follow-up process. Saved them hours every week. If that sounds useful, I'd love to chat.`,
+    template: `Hey [Name], almost fully booked for the season. Just wrapped up with Melnyk Concrete — saved them hours every week on admin. One spot left. Reply and I'll show you exactly how. - Adam`,
   },
   {
     step: 6,
     delayDays: 30,
-    template: `Hey [Name], Adam from Saltarelli Web Studio. I know timing is everything — whenever you're ready to look at automating some of the admin side of your business, I'm here. Just reply and we'll set something up.`,
+    template: `Hey [Name], after this I'm moving you to a waitlist — only take 2-3 new clients a month and I'm there. If you've been sitting on it, just reply. I'll send the video and we'll go from there. - Adam, Saltarelli Web Studio`,
   },
   {
     step: 7,
     delayDays: 45,
-    template: `Hey [Name], last note from me — if you ever want to explore how apps and automations can help your business run smoother, my door's always open. All the best! - Adam, Saltarelli Web Studio`,
+    template: `Hey [Name], last one from me — I mean it this time 😅. If the timing ever works, you know where to find me. The video offer stands. Good luck out there. - Adam, Saltarelli Web Studio`,
   },
 ];
 
