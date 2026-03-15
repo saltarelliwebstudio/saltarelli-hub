@@ -23,7 +23,9 @@ import {
   usePerPodStatsForMonth,
   useAllCallLogsForMonth,
   useMonthlyHistorySummaries,
+  useAdminLeads,
 } from '@/hooks/useSupabaseData';
+import { LeadAnalytics } from '@/components/admin/LeadAnalytics';
 import { cn } from '@/lib/utils';
 
 const MONTH_NAMES = [
@@ -43,6 +45,9 @@ export default function AdminAnalytics() {
 
   // All-time stats (for total clients count)
   const { data: stats, isLoading: statsLoading } = useAdminStats();
+
+  // Admin leads (for lead analytics)
+  const { data: adminLeads } = useAdminLeads();
 
   // Call volume stats (pinned to current period)
   const { data: volumeStats, isLoading: volumeLoading } = useCallVolumeStats();
@@ -121,6 +126,9 @@ export default function AdminAnalytics() {
           </>
         )}
       </div>
+
+      {/* Lead Analytics */}
+      {adminLeads && <LeadAnalytics leads={adminLeads} />}
 
       {/* Month Picker */}
       <div className="flex items-center gap-3">

@@ -31,6 +31,12 @@ const SETTING_GROUPS = [
     keys: ['twilio_account_sid', 'twilio_auth_token', 'twilio_phone_number'],
   },
   {
+    title: 'OpenPhone',
+    description: 'SMS drip campaign credentials — used for automated lead follow-ups',
+    icon: '📱',
+    keys: ['openphone_api_key', 'openphone_phone_number_id'],
+  },
+  {
     title: 'Modal',
     description: 'Backend API endpoint and authentication',
     icon: '⚡',
@@ -44,7 +50,7 @@ const SETTING_GROUPS = [
   },
 ];
 
-const SENSITIVE_KEYS = ['retell_default_api_key', 'twilio_auth_token', 'modal_auth_token', 'zen_planner_password'];
+const SENSITIVE_KEYS = ['retell_default_api_key', 'twilio_auth_token', 'modal_auth_token', 'openphone_api_key', 'zen_planner_password'];
 
 function useIntegrationSettings() {
   return useQuery({

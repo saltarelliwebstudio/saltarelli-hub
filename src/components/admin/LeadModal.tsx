@@ -38,7 +38,6 @@ import { generatePassword } from '@/lib/utils';
 import {
   useCreateAdminLead,
   useUpdateAdminLead,
-  useDeleteAdminLead,
   useCreateClient,
   type AdminLead,
 } from '@/hooks/useSupabaseData';
@@ -67,7 +66,6 @@ export function LeadModal({ open, onOpenChange, lead }: LeadModalProps) {
   const navigate = useNavigate();
   const createLead = useCreateAdminLead();
   const updateLead = useUpdateAdminLead();
-  const deleteLead = useDeleteAdminLead();
   const createClient = useCreateClient();
 
   const isEditing = !!lead;
@@ -127,6 +125,8 @@ export function LeadModal({ open, onOpenChange, lead }: LeadModalProps) {
   const handleStatusChange = (newStatus: LeadStatus) => {
     if (newStatus === 'client') {
       setPreviousStatus(status);
+      setClientEmail(email);
+      setClientPhone(phone);
       setShowClientConfirm(true);
     } else {
       setStatus(newStatus);
@@ -136,27 +136,39 @@ export function LeadModal({ open, onOpenChange, lead }: LeadModalProps) {
   const handleClientConfirmCancel = () => {
     setShowClientConfirm(false);
     setClientPassword('');
+    setClientEmail('');
+    setClientPhone('');
     setShowPassword(false);
   };
 
+  // Client conversion form state
+  const [clientEmail, setClientEmail] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
+
   const handleClientConfirm = async () => {
     if (!clientPassword || clientPassword.length < 8) return;
+    if (!clientEmail.trim() || !clientPhone.trim()) return;
 
     try {
       await createClient.mutateAsync({
-        email: email || `${name.toLowerCase().replace(/\s+/g, '.')}@placeholder.com`,
+        email: clientEmail.trim(),
         password: clientPassword,
         full_name: name,
-        phone: phone || undefined,
+        phone: clientPhone.trim(),
         company_name: businessName || undefined,
       });
 
       if (lead) {
-        await deleteLead.mutateAsync(lead.id);
+        await updateLead.mutateAsync({
+          id: lead.id,
+          updates: { status: 'client', closed_at: new Date().toISOString() },
+        });
       }
 
       setShowClientConfirm(false);
       setClientPassword('');
+      setClientEmail('');
+      setClientPhone('');
       onOpenChange(false);
       navigate('/admin/clients');
     } catch {
@@ -419,10 +431,32 @@ export function LeadModal({ open, onOpenChange, lead }: LeadModalProps) {
           <AlertDialogHeader>
             <AlertDialogTitle>Move lead to Clients?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will create a new client account for <strong>{name}</strong> and remove them from your leads list. Set a password for their account.
+              This will create a new client account for <strong>{name}</strong> and mark them as converted in your leads. Fill in the required details below.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Email *</Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={clientEmail}
+                  onChange={(e) => setClientEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone *</Label>
+                <Input
+                  placeholder="(555) 123-4567"
+                  value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
+                />
+              </div>
+            </div>
+            {(!clientEmail.trim() || !clientPhone.trim()) && (
+              <p className="text-sm text-destructive">Email and phone are required</p>
+            )}
             <Label>Client Password *</Label>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -464,7 +498,7 @@ export function LeadModal({ open, onOpenChange, lead }: LeadModalProps) {
             <AlertDialogCancel onClick={handleClientConfirmCancel}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleClientConfirm}
-              disabled={!clientPassword || clientPassword.length < 8 || createClient.isPending}
+              disabled={!clientPassword || clientPassword.length < 8 || !clientEmail.trim() || !clientPhone.trim() || createClient.isPending}
               className="gradient-orange text-white"
             >
               {createClient.isPending ? (

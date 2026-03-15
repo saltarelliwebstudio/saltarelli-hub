@@ -20,7 +20,22 @@ export interface AdminLead {
   next_followup_date: string | null;
   followup_date: string | null;
   date_added: string;
+  closed_at: string | null;
   created_at: string;
+  drip_active: boolean;
+  drip_paused_at: string | null;
+  drip_step: number;
+}
+
+export interface SmsDripLog {
+  id: string;
+  lead_id: string;
+  step: number;
+  sent_at: string;
+  message_body: string;
+  status: string;
+  openphone_message_id: string | null;
+  error_message: string | null;
 }
 export type PodSettings = Tables<'pod_settings'>;
 export type CallLog = Tables<'call_logs'>;
@@ -1996,6 +2011,9 @@ export function useUpdateAdminLead() {
 
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<AdminLead> }) => {
+      if (updates.status === 'closed' || updates.status === 'client') {
+        updates.closed_at = updates.closed_at ?? new Date().toISOString();
+      }
       const { data, error } = await supabase
         .from('admin_leads')
         .update(updates)
@@ -2071,6 +2089,73 @@ export function useAdminFollowupsDue() {
 
       if (error) throw error;
       return data as AdminLead[];
+    },
+  });
+}
+
+// Fetch drip log for a specific lead
+export function useLeadDripLog(leadId: string | undefined) {
+  return useQuery({
+    queryKey: ['lead-drip-log', leadId],
+    queryFn: async () => {
+      if (!leadId) return [];
+      const { data, error } = await supabase
+        .from('sms_drip_log')
+        .select('*')
+        .eq('lead_id', leadId)
+        .order('step', { ascending: true });
+
+      if (error) throw error;
+      return data as SmsDripLog[];
+    },
+    enabled: !!leadId,
+  });
+}
+
+// Toggle drip active/paused for a lead
+export function useToggleLeadDrip() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, drip_active, pause }: { id: string; drip_active?: boolean; pause?: boolean }) => {
+      const updates: Record<string, unknown> = {};
+      if (typeof drip_active === 'boolean') {
+        updates.drip_active = drip_active;
+        if (drip_active) {
+          updates.drip_paused_at = null;
+        }
+      }
+      if (pause === true) {
+        updates.drip_paused_at = new Date().toISOString();
+      } else if (pause === false) {
+        updates.drip_paused_at = null;
+      }
+
+      const { data, error } = await supabase
+        .from('admin_leads')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as AdminLead;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-leads'] });
+      const action = variables.pause ? 'paused' : variables.drip_active ? 'activated' : 'deactivated';
+      toast({
+        title: `Drip ${action}`,
+        description: `SMS drip campaign has been ${action}.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to update drip',
+        description: error.message,
+        variant: 'destructive',
+      });
     },
   });
 }

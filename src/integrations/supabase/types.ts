@@ -90,6 +90,47 @@ export type Database = {
           },
         ]
       }
+      sms_drip_log: {
+        Row: {
+          id: string
+          lead_id: string
+          step: number
+          sent_at: string
+          message_body: string
+          status: string
+          openphone_message_id: string | null
+          error_message: string | null
+        }
+        Insert: {
+          id?: string
+          lead_id: string
+          step: number
+          sent_at?: string
+          message_body: string
+          status?: string
+          openphone_message_id?: string | null
+          error_message?: string | null
+        }
+        Update: {
+          id?: string
+          lead_id?: string
+          step?: number
+          sent_at?: string
+          message_body?: string
+          status?: string
+          openphone_message_id?: string | null
+          error_message?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sms_drip_log_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "admin_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_modules: {
         Row: {
           created_at: string
