@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
       .is("drip_paused_at", null)
       .lt("drip_step", 7)
       .not("phone", "is", null)
-      .not("status", "in", '("closed","client")');
+      .not("status", "in", '("closed","client","do_not_contact")');
 
     if (leadsError) {
       console.error("Error fetching leads:", leadsError);

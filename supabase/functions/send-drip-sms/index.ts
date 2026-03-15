@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    if (lead.status === "closed" || lead.status === "client") {
+    if (lead.status === "closed" || lead.status === "client" || lead.status === "do_not_contact") {
       return new Response(
         JSON.stringify({ skipped: true, reason: `lead status is ${lead.status}` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

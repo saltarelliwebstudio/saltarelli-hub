@@ -1,35 +1,41 @@
 -- ============================================
--- SMS Drip Campaign — schema + pg_cron job
+-- SMS Drip Campaign — add missing columns, pg_cron job, triggers
+-- Builds on top of 20260312000001_add_sms_drip_sequence.sql
 -- ============================================
 
--- 1. Add drip columns to admin_leads
+-- 1. Add drip columns to admin_leads (IF NOT EXISTS)
 ALTER TABLE public.admin_leads
-  ADD COLUMN drip_active BOOLEAN NOT NULL DEFAULT false,
-  ADD COLUMN drip_paused_at TIMESTAMPTZ,
-  ADD COLUMN drip_step INTEGER NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS drip_active BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE public.admin_leads
+  ADD COLUMN IF NOT EXISTS drip_paused_at TIMESTAMPTZ;
+ALTER TABLE public.admin_leads
+  ADD COLUMN IF NOT EXISTS drip_step INTEGER NOT NULL DEFAULT 0;
 
-CREATE INDEX idx_admin_leads_drip_active ON public.admin_leads(drip_active) WHERE drip_active = true;
+CREATE INDEX IF NOT EXISTS idx_admin_leads_drip_active ON public.admin_leads(drip_active) WHERE drip_active = true;
 
--- 2. Create sms_drip_log table
-CREATE TABLE public.sms_drip_log (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_id UUID NOT NULL REFERENCES public.admin_leads(id) ON DELETE CASCADE,
-  step INTEGER NOT NULL,
-  sent_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  message_body TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'sent',
-  openphone_message_id TEXT,
-  error_message TEXT
-);
+-- 2. Add missing columns to sms_drip_log (existing table from 20260312 migration)
+-- Add 'step' column (maps to day_number conceptually but used by Edge Functions)
+ALTER TABLE public.sms_drip_log
+  ADD COLUMN IF NOT EXISTS step INTEGER;
+ALTER TABLE public.sms_drip_log
+  ADD COLUMN IF NOT EXISTS message_body TEXT;
+ALTER TABLE public.sms_drip_log
+  ADD COLUMN IF NOT EXISTS openphone_message_id TEXT;
 
-ALTER TABLE public.sms_drip_log ENABLE ROW LEVEL SECURITY;
+CREATE INDEX IF NOT EXISTS idx_sms_drip_log_sent_at ON public.sms_drip_log(sent_at DESC);
 
-CREATE POLICY "Admins can manage sms drip logs"
-  ON public.sms_drip_log FOR ALL
-  USING (public.is_admin(auth.uid()));
-
-CREATE INDEX idx_sms_drip_log_lead_id ON public.sms_drip_log(lead_id);
-CREATE INDEX idx_sms_drip_log_sent_at ON public.sms_drip_log(sent_at DESC);
+-- Ensure admins can manage (not just read) sms_drip_log
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE tablename = 'sms_drip_log'
+    AND policyname = 'Admins can manage sms drip logs'
+  ) THEN
+    CREATE POLICY "Admins can manage sms drip logs"
+      ON public.sms_drip_log FOR ALL
+      USING (public.is_admin(auth.uid()));
+  END IF;
+END $$;
 
 -- 3. Seed OpenPhone integration settings (if not already present)
 INSERT INTO public.integration_settings (key, value, description) VALUES
@@ -43,7 +49,7 @@ SELECT cron.schedule(
   '0 * * * *',
   $$
   SELECT net.http_post(
-    url := 'https://lipahzaksypfqojqtwjr.supabase.co/functions/v1/process-drip-queue',
+    url := 'https://veyhxazlqekiweynjxhf.supabase.co/functions/v1/process-drip-queue',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
@@ -53,13 +59,13 @@ SELECT cron.schedule(
   $$
 );
 
--- 5. Trigger function: send step 1 immediately when drip_active is set to true on INSERT
+-- 5. Trigger function: send step 1 immediately when drip_active is set to true
 CREATE OR REPLACE FUNCTION public.trigger_drip_step1()
 RETURNS TRIGGER AS $$
 BEGIN
   IF NEW.drip_active = true AND NEW.phone IS NOT NULL THEN
     PERFORM net.http_post(
-      url := 'https://lipahzaksypfqojqtwjr.supabase.co/functions/v1/send-drip-sms',
+      url := 'https://veyhxazlqekiweynjxhf.supabase.co/functions/v1/send-drip-sms',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
         'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true)
@@ -71,13 +77,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+-- Drop triggers first if they exist (idempotent)
+DROP TRIGGER IF EXISTS drip_step1_on_insert ON public.admin_leads;
+DROP TRIGGER IF EXISTS drip_step1_on_activate ON public.admin_leads;
+
 CREATE TRIGGER drip_step1_on_insert
   AFTER INSERT ON public.admin_leads
   FOR EACH ROW
   WHEN (NEW.drip_active = true)
   EXECUTE FUNCTION public.trigger_drip_step1();
 
--- Also fire when drip_active is toggled from false to true on UPDATE
 CREATE TRIGGER drip_step1_on_activate
   AFTER UPDATE OF drip_active ON public.admin_leads
   FOR EACH ROW
