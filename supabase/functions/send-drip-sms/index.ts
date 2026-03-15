@@ -5,52 +5,79 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// 7-step drip sequence: { step, delayDays, template }
-// Day 0 = immediate, then 3, 7, 14, 21, 30, 45
+// 7-step drip sequence matching the original Saltarelli Web Studio campaign
+// Template variables: [Name] = first name, [trade] = derived from service_interest
 const DRIP_SEQUENCE = [
   {
     step: 1,
     delayDays: 0,
-    template: (name: string) =>
-      `Hey ${name}! Thanks for your interest in Saltarelli Web Studio. We'd love to learn more about your project. When's a good time to chat?`,
+    template: `Hey [Name], Adam from Saltarelli Web Studio here in Niagara. I recently helped Zach Melnyk at Melnyk Concrete get back 5+ hours a week with a simple AI automation. Worth a quick chat?`,
   },
   {
     step: 2,
     delayDays: 3,
-    template: (name: string) =>
-      `Hi ${name}, just following up! We specialize in building modern web apps and automations for small businesses. Any questions we can answer?`,
+    template: `Hey [Name], just following up — I know you're busy on the tools. If you ever want to see how other [trade] businesses are saving 5+ hours a week on admin, I'm happy to show you a quick demo. No pressure.`,
   },
   {
     step: 3,
     delayDays: 7,
-    template: (name: string) =>
-      `Hey ${name}, quick check-in — still interested in leveling up your online presence? We have some availability opening up soon.`,
+    template: `Hey [Name], quick thought — what if every missed call turned into a booked job automatically? That's what we set up for trades businesses like yours. Want me to show you how it works? Takes 10 min.`,
   },
   {
     step: 4,
     delayDays: 14,
-    template: (name: string) =>
-      `Hi ${name}! Just wanted to share that we recently helped a client launch their new site in under 2 weeks. Would love to do the same for you!`,
+    template: `Hey [Name], Adam here. Just wanted to check in — still happy to show you how we help [trade] businesses cut their admin time in half. Let me know if you'd like a quick walkthrough.`,
   },
   {
     step: 5,
     delayDays: 21,
-    template: (name: string) =>
-      `Hey ${name}, we're running a special this month for new clients. Want to hear the details? Just reply and we'll fill you in.`,
+    template: `Hey [Name], one more thought — we just helped a concrete company in Niagara automate their entire quote follow-up process. Saved them hours every week. If that sounds useful, I'd love to chat.`,
   },
   {
     step: 6,
     delayDays: 30,
-    template: (name: string) =>
-      `Hi ${name}, it's been a month since we first connected. If you're still thinking about a web project, we're here to help whenever you're ready!`,
+    template: `Hey [Name], Adam from Saltarelli Web Studio. I know timing is everything — whenever you're ready to look at automating some of the admin side of your business, I'm here. Just reply and we'll set something up.`,
   },
   {
     step: 7,
     delayDays: 45,
-    template: (name: string) =>
-      `Hey ${name}, just one last note — our door is always open if you decide to move forward. Feel free to reach out anytime. Best of luck!`,
+    template: `Hey [Name], last note from me — if you ever want to explore how apps and automations can help your business run smoother, my door's always open. All the best! - Adam, Saltarelli Web Studio`,
   },
 ];
+
+/** Derive a friendly trade label from service_interest */
+function deriveTrade(serviceInterest: string | null): string {
+  if (!serviceInterest) return "trades";
+  const si = serviceInterest.toLowerCase();
+  if (si.includes("concrete") || si.includes("paving") || si.includes("masonry")) return "concrete";
+  if (si.includes("landscap")) return "landscaping";
+  if (si.includes("plumb")) return "plumbing";
+  if (si.includes("electr")) return "electrical";
+  if (si.includes("hvac") || si.includes("heat") || si.includes("cool")) return "HVAC";
+  if (si.includes("roofing") || si.includes("roof")) return "roofing";
+  if (si.includes("paint")) return "painting";
+  if (si.includes("clean")) return "cleaning";
+  if (si.includes("construct")) return "construction";
+  if (si.includes("fitness") || si.includes("gym")) return "fitness";
+  if (si.includes("restaurant") || si.includes("food")) return "restaurant";
+  return serviceInterest.split(",")[0].trim().toLowerCase();
+}
+
+/** Normalise a phone number to E.164 format (+1XXXXXXXXXX for North American numbers) */
+function normalisePhone(raw: string): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/[^\d]/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return null; // international or invalid
+}
+
+/** Build personalised message from template + lead */
+function buildMessage(template: string, lead: { name: string; service_interest: string | null }): string {
+  const firstName = (lead.name || "there").split(" ")[0].trim();
+  const trade = deriveTrade(lead.service_interest);
+  return template.replace(/\[Name\]/g, firstName).replace(/\[trade\]/g, trade);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -113,6 +140,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Normalise phone to E.164
+    const normalisedPhone = normalisePhone(lead.phone);
+    if (!normalisedPhone) {
+      return new Response(
+        JSON.stringify({ skipped: true, reason: `invalid phone number: ${lead.phone}` }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Check if this step was already sent
     const { data: existingLog } = await supabase
       .from("sms_drip_log")
@@ -138,8 +174,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const firstName = lead.name.split(" ")[0];
-    const messageBody = stepConfig.template(firstName);
+    const messageBody = buildMessage(stepConfig.template, lead);
 
     // Fetch OpenPhone credentials from integration_settings
     const { data: settings } = await supabase
@@ -152,7 +187,6 @@ Deno.serve(async (req) => {
     const phoneNumberId = settingsMap.get("openphone_phone_number_id");
 
     if (!apiKey || !phoneNumberId) {
-      // Log the failure
       await supabase.from("sms_drip_log").insert({
         lead_id,
         step,
@@ -181,7 +215,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           content: messageBody,
           from: phoneNumberId,
-          to: [lead.phone],
+          to: [normalisedPhone],
         }),
       });
 
