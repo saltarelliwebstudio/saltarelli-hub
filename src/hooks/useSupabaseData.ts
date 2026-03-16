@@ -2160,6 +2160,32 @@ export function useToggleLeadDrip() {
   });
 }
 
+// Fetch leads with invalid phone numbers (have phone but not valid E.164)
+export function useLeadsWithInvalidPhone() {
+  return useQuery({
+    queryKey: ['leads-invalid-phone'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('admin_leads')
+        .select('*')
+        .not('phone', 'is', null)
+        .not('status', 'in', '("closed","client","do_not_contact")')
+        .order('name');
+
+      if (error) throw error;
+
+      // Filter client-side: phone doesn't match 10-digit or 1+10-digit pattern
+      return (data as AdminLead[]).filter((lead) => {
+        if (!lead.phone) return false;
+        const digits = lead.phone.replace(/[^\d]/g, '');
+        if (digits.length === 10) return false;
+        if (digits.length === 11 && digits.startsWith('1')) return false;
+        return true; // invalid
+      });
+    },
+  });
+}
+
 // Fetch Zen Planner attendance data from client_analytics_data
 export function useZenPlannerAttendance(
   clientId: string | undefined,

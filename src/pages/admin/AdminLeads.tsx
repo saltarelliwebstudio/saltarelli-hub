@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Pencil, ContactRound, AlertCircle, Search, PhoneCall, Trash2, Users, MessageSquare, MessageCircleReply, CalendarCheck, Trophy, Pause } from 'lucide-react';
+import { Plus, Pencil, ContactRound, AlertCircle, Search, PhoneCall, Trash2, Users, MessageSquare, MessageCircleReply, CalendarCheck, Trophy, Pause, PhoneOff } from 'lucide-react';
 import { format, isBefore, startOfDay, subDays, isAfter } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -36,7 +36,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Switch } from '@/components/ui/switch';
-import { useAdminLeads, useAdminFollowupsDue, useUpdateAdminLead, useDeleteAdminLead, useToggleLeadDrip, type AdminLead } from '@/hooks/useSupabaseData';
+import { useAdminLeads, useAdminFollowupsDue, useUpdateAdminLead, useDeleteAdminLead, useToggleLeadDrip, useLeadsWithInvalidPhone, type AdminLead } from '@/hooks/useSupabaseData';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { LeadModal } from '@/components/admin/LeadModal';
 import { cn } from '@/lib/utils';
 
@@ -128,6 +129,7 @@ export default function AdminLeads() {
   const updateLead = useUpdateAdminLead();
   const deleteLead = useDeleteAdminLead();
   const toggleDrip = useToggleLeadDrip();
+  const { data: invalidPhoneLeads } = useLeadsWithInvalidPhone();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<AdminLead | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -237,6 +239,26 @@ export default function AdminLeads() {
           </Button>
         </div>
       </div>
+
+      {/* Invalid Phone Numbers Alert */}
+      {invalidPhoneLeads && invalidPhoneLeads.length > 0 && (
+        <Alert variant="destructive" className="border-red-500/30 bg-red-500/5">
+          <PhoneOff className="h-4 w-4" />
+          <AlertTitle>{invalidPhoneLeads.length} lead{invalidPhoneLeads.length !== 1 ? 's' : ''} with invalid phone numbers</AlertTitle>
+          <AlertDescription className="mt-1">
+            <span className="text-sm">
+              These leads have phone numbers that aren't valid (not 10-digit or 1+10-digit). SMS drip is disabled for them.
+            </span>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {invalidPhoneLeads.map((lead) => (
+                <Badge key={lead.id} variant="outline" className="text-xs bg-red-500/10 border-red-500/20 text-red-400">
+                  {lead.name}: {lead.phone}
+                </Badge>
+              ))}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Funnel Stats */}
       {!isLoading && (
@@ -441,9 +463,9 @@ export default function AdminLeads() {
                                 : 'bg-green-500/10 text-green-500 border-green-500/20'
                             )}>
                               {lead.drip_paused_at ? (
-                                <><Pause className="h-3 w-3 mr-0.5" />{lead.drip_step}/7</>
+                                <><Pause className="h-3 w-3 mr-0.5" />{lead.drip_step}/3</>
                               ) : (
-                                <>{lead.drip_step}/7</>
+                                <>{lead.drip_step}/3</>
                               )}
                             </Badge>
                           )}

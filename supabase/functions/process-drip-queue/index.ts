@@ -5,47 +5,23 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Delay schedule: step → days since step 1 was sent
+// 3-step drip: Day 0, Day 3, Day 7
 const STEP_DELAYS: Record<number, number> = {
   1: 0,  // immediate
   2: 3,
   3: 7,
-  4: 14,
-  5: 21,
-  6: 30,
-  7: 45,
 };
 
-// Same templates as send-drip-sms (duplicated — Edge Functions can't share modules)
+const MAX_STEPS = 3;
+const MAX_FAILURES = 3; // deactivate drip after 3 failures per step
+
 const DRIP_TEMPLATES: Record<number, string> = {
   1: `Hey [Name]! Adam from Saltarelli Web Studio here in Niagara. Recently helped Zach at Melnyk Concrete get back 5+ hrs/week with a simple AI automation. Worth a 2-second chat? Just reply and I'll send over a 60-sec video showing exactly what I mean.`,
   2: `Hey [Name], know you're busy. Just wanted you to know I'm reaching out because I genuinely think this saves you time — not just to sell you something. Zach at Melnyk Concrete said the same thing before we started 😄. Reply and I'll send you a quick video, no strings attached. - Adam`,
   3: `Me waiting for you to respond 😅 — but seriously [Name], just reply and I'll shoot you a 60-sec video. That's it. - Adam`,
-  4: `Hey [Name]… it's me again. Had two businesses sign on this week so I'm filling up — but I've kept a spot open with you in mind. Just reply and I'll send the video over. - Adam`,
-  5: `Hey [Name], almost fully booked for the season. Just wrapped up with Melnyk Concrete — saved them hours every week on admin. One spot left. Reply and I'll show you exactly how. - Adam`,
-  6: `Hey [Name], after this I'm moving you to a waitlist — only take 2-3 new clients a month and I'm there. If you've been sitting on it, just reply. I'll send the video and we'll go from there. - Adam, Saltarelli Web Studio`,
-  7: `Hey [Name], last one from me — I mean it this time 😅. If the timing ever works, you know where to find me. The video offer stands. Good luck out there. - Adam, Saltarelli Web Studio`,
 };
 
-/** Derive a friendly trade label from service_interest */
-function deriveTrade(serviceInterest: string | null): string {
-  if (!serviceInterest) return "trades";
-  const si = serviceInterest.toLowerCase();
-  if (si.includes("concrete") || si.includes("paving") || si.includes("masonry")) return "concrete";
-  if (si.includes("landscap")) return "landscaping";
-  if (si.includes("plumb")) return "plumbing";
-  if (si.includes("electr")) return "electrical";
-  if (si.includes("hvac") || si.includes("heat") || si.includes("cool")) return "HVAC";
-  if (si.includes("roofing") || si.includes("roof")) return "roofing";
-  if (si.includes("paint")) return "painting";
-  if (si.includes("clean")) return "cleaning";
-  if (si.includes("construct")) return "construction";
-  if (si.includes("fitness") || si.includes("gym")) return "fitness";
-  if (si.includes("restaurant") || si.includes("food")) return "restaurant";
-  return serviceInterest.split(",")[0].trim().toLowerCase();
-}
-
-/** Normalise a phone number to E.164 format (+1XXXXXXXXXX for North American numbers) */
+/** Normalise a phone number to E.164 format (+1XXXXXXXXXX) */
 function normalisePhone(raw: string): string | null {
   if (!raw) return null;
   const digits = raw.replace(/[^\d]/g, "");
@@ -57,8 +33,7 @@ function normalisePhone(raw: string): string | null {
 /** Build personalised message from template + lead */
 function buildMessage(template: string, lead: { name: string; service_interest: string | null }): string {
   const firstName = (lead.name || "there").split(" ")[0].trim();
-  const trade = deriveTrade(lead.service_interest);
-  return template.replace(/\[Name\]/g, firstName).replace(/\[trade\]/g, trade);
+  return template.replace(/\[Name\]/g, firstName);
 }
 
 Deno.serve(async (req) => {
@@ -66,7 +41,7 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const results = { processed: 0, sent: 0, skipped: 0, errors: 0 };
+  const results = { processed: 0, sent: 0, skipped: 0, errors: 0, deactivated: 0 };
 
   try {
     const supabase = createClient(
@@ -75,13 +50,13 @@ Deno.serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // Fetch eligible leads
+    // Fetch eligible leads — only those with drip active, not paused, not done
     const { data: leads, error: leadsError } = await supabase
       .from("admin_leads")
       .select("*")
       .eq("drip_active", true)
       .is("drip_paused_at", null)
-      .lt("drip_step", 7)
+      .lt("drip_step", MAX_STEPS)
       .not("phone", "is", null)
       .not("status", "in", '("closed","client","do_not_contact")');
 
@@ -123,23 +98,43 @@ Deno.serve(async (req) => {
       results.processed++;
       const nextStep = (lead.drip_step || 0) + 1;
 
-      if (nextStep > 7) {
+      if (nextStep > MAX_STEPS) {
         results.skipped++;
         continue;
       }
 
-      // Normalise phone
+      // Validate phone format
       const normalisedPhone = normalisePhone(lead.phone);
       if (!normalisedPhone) {
-        results.skipped++;
+        // Invalid phone — deactivate drip, skip
+        await supabase
+          .from("admin_leads")
+          .update({ drip_active: false })
+          .eq("id", lead.id);
+        results.deactivated++;
+        continue;
+      }
+
+      // Check how many times this step has already failed
+      const { count: failCount } = await supabase
+        .from("sms_drip_log")
+        .select("id", { count: "exact", head: true })
+        .eq("lead_id", lead.id)
+        .eq("step", nextStep)
+        .eq("status", "failed");
+
+      if ((failCount || 0) >= MAX_FAILURES) {
+        // Too many failures — deactivate drip
+        await supabase
+          .from("admin_leads")
+          .update({ drip_active: false })
+          .eq("id", lead.id);
+        results.deactivated++;
         continue;
       }
 
       // Check delay requirement
-      const requiredDelay = STEP_DELAYS[nextStep] || 0;
-
       if (nextStep > 1) {
-        // Find when the last step was sent
         const { data: lastLog } = await supabase
           .from("sms_drip_log")
           .select("sent_at")
@@ -151,13 +146,13 @@ Deno.serve(async (req) => {
           .maybeSingle();
 
         if (!lastLog) {
-          // Last step has no successful send — skip
           results.skipped++;
           continue;
         }
 
         const lastSentAt = new Date(lastLog.sent_at);
         const daysSinceLast = Math.floor((now.getTime() - lastSentAt.getTime()) / (1000 * 60 * 60 * 24));
+        const requiredDelay = STEP_DELAYS[nextStep] || 0;
 
         if (daysSinceLast < requiredDelay) {
           results.skipped++;
@@ -165,7 +160,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Check for duplicate
+      // Check for duplicate successful send
       const { data: existingLog } = await supabase
         .from("sms_drip_log")
         .select("id")

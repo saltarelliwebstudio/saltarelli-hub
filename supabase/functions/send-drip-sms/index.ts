@@ -5,8 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// 7-step drip sequence matching the original Saltarelli Web Studio campaign
-// Template variables: [Name] = first name, [trade] = derived from service_interest
+// 3-step drip: Day 0, Day 3, Day 7
 const DRIP_SEQUENCE = [
   {
     step: 1,
@@ -23,45 +22,7 @@ const DRIP_SEQUENCE = [
     delayDays: 7,
     template: `Me waiting for you to respond 😅 — but seriously [Name], just reply and I'll shoot you a 60-sec video. That's it. - Adam`,
   },
-  {
-    step: 4,
-    delayDays: 14,
-    template: `Hey [Name]… it's me again. Had two businesses sign on this week so I'm filling up — but I've kept a spot open with you in mind. Just reply and I'll send the video over. - Adam`,
-  },
-  {
-    step: 5,
-    delayDays: 21,
-    template: `Hey [Name], almost fully booked for the season. Just wrapped up with Melnyk Concrete — saved them hours every week on admin. One spot left. Reply and I'll show you exactly how. - Adam`,
-  },
-  {
-    step: 6,
-    delayDays: 30,
-    template: `Hey [Name], after this I'm moving you to a waitlist — only take 2-3 new clients a month and I'm there. If you've been sitting on it, just reply. I'll send the video and we'll go from there. - Adam, Saltarelli Web Studio`,
-  },
-  {
-    step: 7,
-    delayDays: 45,
-    template: `Hey [Name], last one from me — I mean it this time 😅. If the timing ever works, you know where to find me. The video offer stands. Good luck out there. - Adam, Saltarelli Web Studio`,
-  },
 ];
-
-/** Derive a friendly trade label from service_interest */
-function deriveTrade(serviceInterest: string | null): string {
-  if (!serviceInterest) return "trades";
-  const si = serviceInterest.toLowerCase();
-  if (si.includes("concrete") || si.includes("paving") || si.includes("masonry")) return "concrete";
-  if (si.includes("landscap")) return "landscaping";
-  if (si.includes("plumb")) return "plumbing";
-  if (si.includes("electr")) return "electrical";
-  if (si.includes("hvac") || si.includes("heat") || si.includes("cool")) return "HVAC";
-  if (si.includes("roofing") || si.includes("roof")) return "roofing";
-  if (si.includes("paint")) return "painting";
-  if (si.includes("clean")) return "cleaning";
-  if (si.includes("construct")) return "construction";
-  if (si.includes("fitness") || si.includes("gym")) return "fitness";
-  if (si.includes("restaurant") || si.includes("food")) return "restaurant";
-  return serviceInterest.split(",")[0].trim().toLowerCase();
-}
 
 /** Normalise a phone number to E.164 format (+1XXXXXXXXXX for North American numbers) */
 function normalisePhone(raw: string): string | null {
@@ -69,14 +30,13 @@ function normalisePhone(raw: string): string | null {
   const digits = raw.replace(/[^\d]/g, "");
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
-  return null; // international or invalid
+  return null;
 }
 
 /** Build personalised message from template + lead */
 function buildMessage(template: string, lead: { name: string; service_interest: string | null }): string {
   const firstName = (lead.name || "there").split(" ")[0].trim();
-  const trade = deriveTrade(lead.service_interest);
-  return template.replace(/\[Name\]/g, firstName).replace(/\[trade\]/g, trade);
+  return template.replace(/\[Name\]/g, firstName);
 }
 
 Deno.serve(async (req) => {
@@ -143,6 +103,12 @@ Deno.serve(async (req) => {
     // Normalise phone to E.164
     const normalisedPhone = normalisePhone(lead.phone);
     if (!normalisedPhone) {
+      // Invalid phone — deactivate drip
+      await supabase
+        .from("admin_leads")
+        .update({ drip_active: false })
+        .eq("id", lead_id);
+
       return new Response(
         JSON.stringify({ skipped: true, reason: `invalid phone number: ${lead.phone}` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -169,7 +135,7 @@ Deno.serve(async (req) => {
     const stepConfig = DRIP_SEQUENCE.find((s) => s.step === step);
     if (!stepConfig) {
       return new Response(
-        JSON.stringify({ error: `Invalid step: ${step}` }),
+        JSON.stringify({ error: `Invalid step: ${step}. Only steps 1-3 are supported.` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
