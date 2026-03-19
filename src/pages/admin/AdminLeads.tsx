@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Plus, Pencil, ContactRound, AlertCircle, Search, PhoneCall, Trash2, Users, MessageSquare, MessageCircleReply, CalendarCheck, Trophy, Pause, PhoneOff } from 'lucide-react';
-import { format, isBefore, startOfDay, subDays, isAfter } from 'date-fns';
+import { format, isBefore, startOfDay, subDays, isAfter, differenceInDays, addDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -80,6 +80,26 @@ function needsContactWarning(lead: AdminLead): boolean {
   if (!lead.last_contacted_date) return true;
   const contactDate = new Date(lead.last_contacted_date + 'T00:00:00');
   return !isAfter(contactDate, subDays(startOfDay(new Date()), 7));
+}
+
+// Drip step delay days (must match Edge Function config)
+const STEP_DELAYS: Record<number, number> = { 1: 0, 2: 3, 3: 7, 4: 14, 5: 21, 6: 30, 7: 45 };
+const MAX_DRIP_STEPS = 7;
+
+function getNextDripLabel(lead: AdminLead): string | null {
+  if (!lead.drip_active || lead.drip_paused_at) return null;
+  const currentStep = lead.drip_step || 0;
+  if (currentStep >= MAX_DRIP_STEPS) return 'Done';
+  const nextStep = currentStep + 1;
+  if (nextStep === 1) return 'Step 1 now';
+  // Calculate days until next step fires based on last_contacted_date
+  if (!lead.last_contacted_date) return `Step ${nextStep} pending`;
+  const lastContact = new Date(lead.last_contacted_date + 'T00:00:00');
+  const nextDelay = STEP_DELAYS[nextStep] - STEP_DELAYS[currentStep];
+  const fireDate = addDays(lastContact, nextDelay);
+  const daysLeft = differenceInDays(fireDate, startOfDay(new Date()));
+  if (daysLeft <= 0) return `Step ${nextStep} due`;
+  return `Step ${nextStep} in ${daysLeft}d`;
 }
 
 // Funnel stat card component
@@ -463,9 +483,15 @@ export default function AdminLeads() {
                                 : 'bg-green-500/10 text-green-500 border-green-500/20'
                             )}>
                               {lead.drip_paused_at ? (
-                                <><Pause className="h-3 w-3 mr-0.5" />{lead.drip_step}/3</>
+                                <><Pause className="h-3 w-3 mr-0.5" />{lead.drip_step}/{MAX_DRIP_STEPS}</>
                               ) : (
-                                <>{lead.drip_step}/3</>
+                                <>
+                                  {lead.drip_step}/{MAX_DRIP_STEPS}
+                                  {(() => {
+                                    const label = getNextDripLabel(lead);
+                                    return label ? <span className="ml-1 text-muted-foreground font-normal">&middot; {label}</span> : null;
+                                  })()}
+                                </>
                               )}
                             </Badge>
                           )}

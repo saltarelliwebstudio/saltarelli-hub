@@ -5,20 +5,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// 3-step drip: Day 0, Day 3, Day 7
+// 7-step audit drip sequence
 const STEP_DELAYS: Record<number, number> = {
-  1: 0,  // immediate
+  1: 0,   // immediate
   2: 3,
   3: 7,
+  4: 14,
+  5: 21,
+  6: 30,
+  7: 45,
 };
 
-const MAX_STEPS = 3;
+const MAX_STEPS = 7;
 const MAX_FAILURES = 3; // deactivate drip after 3 failures per step
 
 const DRIP_TEMPLATES: Record<number, string> = {
-  1: `Hey [Name]! Adam from Saltarelli Web Studio here in Niagara. Recently helped Zach at Melnyk Concrete get back 5+ hrs/week with a simple AI automation. Worth a 2-second chat? Just reply and I'll send over a 60-sec video showing exactly what I mean.`,
-  2: `Hey [Name], know you're busy. Just wanted you to know I'm reaching out because I genuinely think this saves you time — not just to sell you something. Zach at Melnyk Concrete said the same thing before we started 😄. Reply and I'll send you a quick video, no strings attached. - Adam`,
-  3: `Me waiting for you to respond 😅 — but seriously [Name], just reply and I'll shoot you a 60-sec video. That's it. - Adam`,
+  1: `Hey [Name]! Saw you took the After-Hours Audit — looks like you might be losing $[Leak]/yr and [Hours] hrs/yr to missed calls and admin work. I build systems to fix exactly that. Does that sound about right? - Adam, Saltarelli Web Studio`,
+  2: `Hey [Name], just circling back. I'm not reaching out to push anything — I genuinely think I can help based on your audit results. Just reply and I'll send over a quick case study of how I solved the exact same problem for another local business. - Adam`,
+  3: `Me waiting for you to respond 😅 — but seriously [Name], just reply. 60 seconds, that's it. - Adam`,
+  4: `Hey [Name]… it's me again. Had two businesses sign on this week so I'm filling up fast — but I kept a spot open with you in mind. Still interested? - Adam`,
+  5: `Hey [Name], it's Adam. Almost fully booked for the season but I made sure to leave one spot open. Reply soon and I'll show you exactly how I can help before it's gone. - Adam`,
+  6: `Hey [Name], after this I'm moving you to a waitlist — I only take 2-3 new clients a month and I'm there. Now's the time. Just reply. - Adam, Saltarelli Web Studio`,
+  7: `Hey [Name], last one from me — I mean it this time 😅. If the timing ever works, you know where to find me. Good luck out there. - Adam, Saltarelli Web Studio`,
 };
 
 /** Normalise a phone number to E.164 format (+1XXXXXXXXXX) */
@@ -30,10 +38,27 @@ function normalisePhone(raw: string): string | null {
   return null;
 }
 
+/** Parse audit values from lead notes (Score, Revenue Leak, Hours Lost) */
+function parseAuditNotes(notes: string | null): { score: string; leak: string; hours: string } {
+  if (!notes) return { score: "0", leak: "0", hours: "0" };
+  const scoreMatch = notes.match(/Score:\s*(\d+)/);
+  const leakMatch = notes.match(/Revenue Leak:\s*\$([0-9,]+)/);
+  const hoursMatch = notes.match(/Hours Lost:\s*(\d+)/);
+  return {
+    score: scoreMatch?.[1] || "0",
+    leak: leakMatch?.[1] || "0",
+    hours: hoursMatch?.[1] || "0",
+  };
+}
+
 /** Build personalised message from template + lead */
-function buildMessage(template: string, lead: { name: string; service_interest: string | null }): string {
+function buildMessage(template: string, lead: { name: string; notes: string | null }): string {
   const firstName = (lead.name || "there").split(" ")[0].trim();
-  return template.replace(/\[Name\]/g, firstName);
+  const { leak, hours } = parseAuditNotes(lead.notes);
+  return template
+    .replace(/\[Name\]/g, firstName)
+    .replace(/\[Leak\]/g, leak)
+    .replace(/\[Hours\]/g, hours);
 }
 
 Deno.serve(async (req) => {
@@ -130,6 +155,23 @@ Deno.serve(async (req) => {
           .update({ drip_active: false })
           .eq("id", lead.id);
         results.deactivated++;
+        continue;
+      }
+
+      // Daily rate-limit: skip if already attempted this lead+step today
+      const todayStart = new Date(now);
+      todayStart.setUTCHours(0, 0, 0, 0);
+      const { data: todayAttempt } = await supabase
+        .from("sms_drip_log")
+        .select("id")
+        .eq("lead_id", lead.id)
+        .eq("step", nextStep)
+        .gte("sent_at", todayStart.toISOString())
+        .limit(1)
+        .maybeSingle();
+
+      if (todayAttempt) {
+        results.skipped++;
         continue;
       }
 

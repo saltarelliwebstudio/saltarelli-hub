@@ -59,6 +59,14 @@ Deno.serve(async (req) => {
       .select("id", { count: "exact", head: true })
       .eq("status", "replied");
 
+    // Stats: all-time totals
+    const { data: allTimeLogs } = await supabase
+      .from("sms_drip_log")
+      .select("status");
+
+    const sentAllTime = allTimeLogs?.filter((l) => l.status === "sent").length || 0;
+    const failedAllTime = allTimeLogs?.filter((l) => l.status === "failed").length || 0;
+
     // Stats: leads by step
     const { data: stepData } = await supabase
       .from("admin_leads")
@@ -80,6 +88,7 @@ Deno.serve(async (req) => {
       `Drip Status Report`,
       `Active: ${activeCount || 0} leads`,
       `Last 24h: ${sent24h} sent, ${failed24h} failed`,
+      `All-time: ${sentAllTime} sent, ${failedAllTime} failed`,
       `Replies: ${repliedCount || 0} total`,
       `Steps: ${stepSummary || "none"}`,
     ];

@@ -5,22 +5,42 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// 3-step drip: Day 0, Day 3, Day 7
+// 7-step audit drip: inbound leads who completed the After-Hours Audit
 const DRIP_SEQUENCE = [
   {
     step: 1,
     delayDays: 0,
-    template: `Hey [Name]! Adam from Saltarelli Web Studio here in Niagara. Recently helped Zach at Melnyk Concrete get back 5+ hrs/week with a simple AI automation. Worth a 2-second chat? Just reply and I'll send over a 60-sec video showing exactly what I mean.`,
+    template: `Hey [Name]! Saw you took the After-Hours Audit — looks like you might be losing $[Leak]/yr and [Hours] hrs/yr to missed calls and admin work. I build systems to fix exactly that. Does that sound about right? - Adam, Saltarelli Web Studio`,
   },
   {
     step: 2,
     delayDays: 3,
-    template: `Hey [Name], know you're busy. Just wanted you to know I'm reaching out because I genuinely think this saves you time — not just to sell you something. Zach at Melnyk Concrete said the same thing before we started 😄. Reply and I'll send you a quick video, no strings attached. - Adam`,
+    template: `Hey [Name], just circling back. I'm not reaching out to push anything — I genuinely think I can help based on your audit results. Just reply and I'll send over a quick case study of how I solved the exact same problem for another local business. - Adam`,
   },
   {
     step: 3,
     delayDays: 7,
-    template: `Me waiting for you to respond 😅 — but seriously [Name], just reply and I'll shoot you a 60-sec video. That's it. - Adam`,
+    template: `Me waiting for you to respond 😅 — but seriously [Name], just reply. 60 seconds, that's it. - Adam`,
+  },
+  {
+    step: 4,
+    delayDays: 14,
+    template: `Hey [Name]… it's me again. Had two businesses sign on this week so I'm filling up fast — but I kept a spot open with you in mind. Still interested? - Adam`,
+  },
+  {
+    step: 5,
+    delayDays: 21,
+    template: `Hey [Name], it's Adam. Almost fully booked for the season but I made sure to leave one spot open. Reply soon and I'll show you exactly how I can help before it's gone. - Adam`,
+  },
+  {
+    step: 6,
+    delayDays: 30,
+    template: `Hey [Name], after this I'm moving you to a waitlist — I only take 2-3 new clients a month and I'm there. Now's the time. Just reply. - Adam, Saltarelli Web Studio`,
+  },
+  {
+    step: 7,
+    delayDays: 45,
+    template: `Hey [Name], last one from me — I mean it this time 😅. If the timing ever works, you know where to find me. Good luck out there. - Adam, Saltarelli Web Studio`,
   },
 ];
 
@@ -33,10 +53,27 @@ function normalisePhone(raw: string): string | null {
   return null;
 }
 
+/** Parse audit values from lead notes (Score, Revenue Leak, Hours Lost) */
+function parseAuditNotes(notes: string | null): { score: string; leak: string; hours: string } {
+  if (!notes) return { score: "0", leak: "0", hours: "0" };
+  const scoreMatch = notes.match(/Score:\s*(\d+)/);
+  const leakMatch = notes.match(/Revenue Leak:\s*\$([0-9,]+)/);
+  const hoursMatch = notes.match(/Hours Lost:\s*(\d+)/);
+  return {
+    score: scoreMatch?.[1] || "0",
+    leak: leakMatch?.[1] || "0",
+    hours: hoursMatch?.[1] || "0",
+  };
+}
+
 /** Build personalised message from template + lead */
-function buildMessage(template: string, lead: { name: string; service_interest: string | null }): string {
+function buildMessage(template: string, lead: { name: string; notes: string | null }): string {
   const firstName = (lead.name || "there").split(" ")[0].trim();
-  return template.replace(/\[Name\]/g, firstName);
+  const { leak, hours } = parseAuditNotes(lead.notes);
+  return template
+    .replace(/\[Name\]/g, firstName)
+    .replace(/\[Leak\]/g, leak)
+    .replace(/\[Hours\]/g, hours);
 }
 
 Deno.serve(async (req) => {
@@ -135,7 +172,7 @@ Deno.serve(async (req) => {
     const stepConfig = DRIP_SEQUENCE.find((s) => s.step === step);
     if (!stepConfig) {
       return new Response(
-        JSON.stringify({ error: `Invalid step: ${step}. Only steps 1-3 are supported.` }),
+        JSON.stringify({ error: `Invalid step: ${step}. Only steps 1-7 are supported.` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
