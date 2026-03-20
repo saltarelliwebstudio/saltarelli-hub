@@ -152,18 +152,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if this step was already sent
+    // Check if this step was already sent OR attempted recently (prevents race condition double-sends)
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const { data: existingLog } = await supabase
       .from("sms_drip_log")
-      .select("id")
+      .select("id, status")
       .eq("lead_id", lead_id)
       .eq("step", step)
-      .eq("status", "sent")
+      .or(`status.eq.sent,sent_at.gte.${fiveMinAgo}`)
+      .limit(1)
       .maybeSingle();
 
     if (existingLog) {
       return new Response(
-        JSON.stringify({ skipped: true, reason: `step ${step} already sent` }),
+        JSON.stringify({ skipped: true, reason: `step ${step} already sent or recently attempted` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

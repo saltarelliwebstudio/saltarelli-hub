@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { name, phone, score, revenueLeak, hoursLost } = await req.json();
+    const { name, email, phone, score, revenueLeak, hoursLost } = await req.json();
 
     if (!name || !phone) {
       return new Response(
@@ -70,8 +70,10 @@ Deno.serve(async (req) => {
         // Create lead in admin_leads — DB triggers auto-fire drip Step 1
         const { error: insertError } = await supabase.from("admin_leads").insert({
           name,
+          email: email || null,
           phone: normPhone,
           source: "after-hours-audit",
+          service_interest: "Smart Stack Pack",
           status: "warm",
           notes: `Score: ${score}\nRevenue Leak: $${leakFormatted}\nHours Lost: ${hoursFormatted}`,
           drip_active: true,
