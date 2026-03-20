@@ -28,19 +28,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { path, referrer, sessionId } = await req.json();
-
-    if (!path) {
-      return new Response(
-        JSON.stringify({ error: "path is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const body = await req.json();
+    const { type } = body; // 'pageview' (default) or 'event'
 
     const ua = req.headers.get("user-agent") || "";
     const { device, browser } = parseDevice(ua);
-
-    // Get country from Cloudflare/Vercel headers (Supabase runs on Deno Deploy)
     const country = req.headers.get("cf-ipcountry") ||
       req.headers.get("x-vercel-ip-country") ||
       req.headers.get("x-country") ||
@@ -52,15 +44,43 @@ Deno.serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    await supabase.from("page_views").insert({
-      path,
-      referrer: referrer || null,
-      user_agent: ua,
-      device,
-      browser,
-      country,
-      session_id: sessionId || null,
-    });
+    if (type === "event") {
+      // Event tracking
+      const { event, path, metadata, sessionId } = body;
+      if (!event) {
+        return new Response(
+          JSON.stringify({ error: "event name is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      await supabase.from("site_events").insert({
+        event,
+        path: path || null,
+        metadata: metadata || null,
+        session_id: sessionId || null,
+        device,
+      });
+    } else {
+      // Page view tracking (default)
+      const { path, referrer, sessionId } = body;
+      if (!path) {
+        return new Response(
+          JSON.stringify({ error: "path is required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      await supabase.from("page_views").insert({
+        path,
+        referrer: referrer || null,
+        user_agent: ua,
+        device,
+        browser,
+        country,
+        session_id: sessionId || null,
+      });
+    }
 
     return new Response(
       JSON.stringify({ ok: true }),

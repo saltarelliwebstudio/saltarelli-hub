@@ -2314,3 +2314,84 @@ export function usePageViewStats(days: number = 30) {
     },
   });
 }
+
+export interface SiteEventStats {
+  auditStarts: number;
+  auditCompletes: number;
+  calendlyClicks: number;
+  ctaClicks: number;
+  avgTimeOnPage: number; // seconds (from heartbeat milestones)
+  sectionViews: Record<string, number>;
+  conversionRate: number; // audit_complete / unique visitors %
+  auditToBooking: number; // calendly_click / audit_complete %
+}
+
+export function useSiteEventStats(days: number = 30) {
+  return useQuery({
+    queryKey: ['site-event-stats', days],
+    queryFn: async (): Promise<SiteEventStats> => {
+      const since = new Date();
+      since.setDate(since.getDate() - days);
+
+      const { data, error } = await supabase
+        .from('site_events')
+        .select('event, metadata, session_id, created_at')
+        .gte('created_at', since.toISOString());
+
+      if (error) throw error;
+      const rows = data || [];
+
+      const auditStarts = rows.filter(r => r.event === 'audit_start').length;
+      const auditCompletes = rows.filter(r => r.event === 'audit_complete').length;
+      const calendlyClicks = rows.filter(r => r.event === 'calendly_click').length;
+      const ctaClicks = rows.filter(r => r.event === 'cta_click').length;
+
+      // Avg time on page from heartbeat events (take max milestone per session)
+      const heartbeats = rows.filter(r => r.event === 'time_on_page');
+      const sessionMaxTime: Record<string, number> = {};
+      for (const hb of heartbeats) {
+        const sid = hb.session_id || 'unknown';
+        const seconds = (hb.metadata as any)?.seconds || 0;
+        if (!sessionMaxTime[sid] || seconds > sessionMaxTime[sid]) {
+          sessionMaxTime[sid] = seconds;
+        }
+      }
+      const timeValues = Object.values(sessionMaxTime);
+      const avgTimeOnPage = timeValues.length > 0
+        ? Math.round(timeValues.reduce((a, b) => a + b, 0) / timeValues.length)
+        : 0;
+
+      // Section views
+      const sectionEvents = rows.filter(r => r.event === 'scroll_section');
+      const sectionViews: Record<string, number> = {};
+      for (const se of sectionEvents) {
+        const section = (se.metadata as any)?.section || 'unknown';
+        sectionViews[section] = (sectionViews[section] || 0) + 1;
+      }
+
+      // Get unique visitors from page_views for conversion rate
+      const { data: pvData } = await supabase
+        .from('page_views')
+        .select('session_id')
+        .gte('created_at', since.toISOString());
+
+      const uniqueVisitors = new Set((pvData || []).map((r: any) => r.session_id).filter(Boolean)).size || 1;
+
+      const conversionRate = Math.round((auditCompletes / uniqueVisitors) * 100);
+      const auditToBooking = auditCompletes > 0
+        ? Math.round((calendlyClicks / auditCompletes) * 100)
+        : 0;
+
+      return {
+        auditStarts,
+        auditCompletes,
+        calendlyClicks,
+        ctaClicks,
+        avgTimeOnPage,
+        sectionViews,
+        conversionRate,
+        auditToBooking,
+      };
+    },
+  });
+}

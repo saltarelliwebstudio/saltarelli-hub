@@ -25,4 +25,4 @@ CREATE POLICY "Anyone can insert page views"
 
 CREATE POLICY "Admins can read page views"
   ON public.page_views FOR SELECT
-  USING (public.is_admin(auth.uid()));
+  USING (public.is_admin());
