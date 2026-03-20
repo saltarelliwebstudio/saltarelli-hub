@@ -5,12 +5,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// 7-step audit drip: inbound leads who completed the After-Hours Audit
+// 7-step audit drip: inbound leads who completed the Leaky Bucket Audit
 const DRIP_SEQUENCE = [
   {
     step: 1,
     delayDays: 0,
-    template: `Hey [Name]! Saw you took the After-Hours Audit — looks like you might be losing $[Leak]/yr and [Hours] hrs/yr to missed calls and admin work. I build systems to fix exactly that. Does that sound about right? - Adam, Saltarelli Web Studio`,
+    template: `Hey [Name]! Saw you took the Leaky Bucket Audit — looks like you might be losing $[Leak]/yr and [Hours] hrs/yr to missed calls and admin work. I build systems to fix exactly that. Does that sound about right? - Adam, Saltarelli Web Studio`,
   },
   {
     step: 2,

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { BarChart3, Phone, Zap, ContactRound, Users, TrendingUp, Search, Calendar } from 'lucide-react';
+import { BarChart3, Phone, Zap, ContactRound, Users, TrendingUp, Search, Calendar, Globe, Eye, Monitor, Smartphone, Tablet, ExternalLink } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,7 +24,15 @@ import {
   useAllCallLogsForMonth,
   useMonthlyHistorySummaries,
   useAdminLeads,
+  usePageViewStats,
 } from '@/hooks/useSupabaseData';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { LeadAnalytics } from '@/components/admin/LeadAnalytics';
 import { cn } from '@/lib/utils';
 
@@ -38,16 +46,26 @@ const SHORT_MONTHS = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
 
+const DEVICE_ICONS: Record<string, React.ElementType> = {
+  desktop: Monitor,
+  mobile: Smartphone,
+  tablet: Tablet,
+};
+
 export default function AdminAnalytics() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState({ month: now.getMonth(), year: now.getFullYear() });
   const [historySearch, setHistorySearch] = useState('');
+  const [webDays, setWebDays] = useState('30');
 
   // All-time stats (for total clients count)
   const { data: stats, isLoading: statsLoading } = useAdminStats();
 
   // Admin leads (for lead analytics)
   const { data: adminLeads } = useAdminLeads();
+
+  // Website analytics
+  const { data: webStats, isLoading: webLoading } = usePageViewStats(Number(webDays));
 
   // Call volume stats (pinned to current period)
   const { data: volumeStats, isLoading: volumeLoading } = useCallVolumeStats();
@@ -93,6 +111,172 @@ export default function AdminAnalytics() {
         <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
         <p className="text-muted-foreground">Aggregated stats across all clients</p>
       </div>
+
+      {/* ── Website Traffic ── */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Globe className="h-5 w-5 text-accent" />
+              Website Traffic — saltarelliwebstudio.ca
+            </CardTitle>
+            <Select value={webDays} onValueChange={setWebDays}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Last 7 days</SelectItem>
+                <SelectItem value="14">Last 14 days</SelectItem>
+                <SelectItem value="30">Last 30 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {webLoading ? (
+            <div className="grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-[80px] rounded-lg" />)}
+            </div>
+          ) : !webStats || webStats.totalViews === 0 ? (
+            <p className="text-center py-8 text-muted-foreground">
+              No page views recorded yet. Data will appear once visitors start hitting the site.
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {/* Stat summary */}
+              <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+                <div className="p-4 rounded-lg bg-blue-500/10 text-center">
+                  <Eye className="h-4 w-4 text-blue-500 mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-blue-500">{webStats.totalViews.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Page Views</p>
+                </div>
+                <div className="p-4 rounded-lg bg-green-500/10 text-center">
+                  <Users className="h-4 w-4 text-green-500 mx-auto mb-1" />
+                  <p className="text-2xl font-bold text-green-500">{webStats.uniqueVisitors.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">Unique Visitors</p>
+                </div>
+                <div className="p-4 rounded-lg bg-purple-500/10 text-center">
+                  <p className="text-2xl font-bold text-purple-500">
+                    {webStats.uniqueVisitors > 0
+                      ? (webStats.totalViews / webStats.uniqueVisitors).toFixed(1)
+                      : '0'}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Pages / Visitor</p>
+                </div>
+                <div className="p-4 rounded-lg bg-orange-500/10 text-center">
+                  <p className="text-2xl font-bold text-orange-500">
+                    {webStats.dailyViews.length > 0
+                      ? Math.round(webStats.totalViews / webStats.dailyViews.length)
+                      : 0}
+                  </p>
+                  <p className="text-xs text-muted-foreground">Avg Daily Views</p>
+                </div>
+              </div>
+
+              {/* Daily chart (simple bar visualization) */}
+              {webStats.dailyViews.length > 1 && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-3">Daily Traffic</p>
+                  <div className="flex items-end gap-1 h-32">
+                    {webStats.dailyViews.map((d) => {
+                      const maxViews = Math.max(...webStats.dailyViews.map(v => v.views));
+                      const height = maxViews > 0 ? (d.views / maxViews) * 100 : 0;
+                      return (
+                        <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
+                          <div
+                            className="w-full bg-primary/60 rounded-t hover:bg-primary transition-colors min-h-[2px]"
+                            style={{ height: `${height}%` }}
+                          />
+                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:block bg-popover border rounded px-2 py-1 text-xs whitespace-nowrap shadow-md z-10">
+                            {d.date.slice(5)}: {d.views} views, {d.visitors} visitors
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-muted-foreground">{webStats.dailyViews[0]?.date.slice(5)}</span>
+                    <span className="text-[10px] text-muted-foreground">{webStats.dailyViews[webStats.dailyViews.length - 1]?.date.slice(5)}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Details grid */}
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {/* Top Pages */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Top Pages</p>
+                  <div className="space-y-1.5">
+                    {webStats.topPages.map((p) => (
+                      <div key={p.path} className="flex items-center justify-between text-sm">
+                        <span className="truncate text-foreground">{p.path === '/' ? 'Home' : p.path}</span>
+                        <Badge variant="secondary" className="ml-2 shrink-0">{p.views}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Top Referrers */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Referrers</p>
+                  <div className="space-y-1.5">
+                    {webStats.topReferrers.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">All direct traffic</p>
+                    ) : (
+                      webStats.topReferrers.map((r) => (
+                        <div key={r.referrer} className="flex items-center justify-between text-sm">
+                          <span className="truncate text-foreground flex items-center gap-1">
+                            <ExternalLink className="h-3 w-3 shrink-0" />
+                            {r.referrer}
+                          </span>
+                          <Badge variant="secondary" className="ml-2 shrink-0">{r.views}</Badge>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Devices */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Devices</p>
+                  <div className="space-y-1.5">
+                    {webStats.devices.map((d) => {
+                      const Icon = DEVICE_ICONS[d.device] || Monitor;
+                      const pct = webStats.totalViews > 0 ? Math.round((d.views / webStats.totalViews) * 100) : 0;
+                      return (
+                        <div key={d.device} className="flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-1.5 capitalize text-foreground">
+                            <Icon className="h-3.5 w-3.5" />
+                            {d.device}
+                          </span>
+                          <span className="text-muted-foreground">{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Browsers */}
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Browsers</p>
+                  <div className="space-y-1.5">
+                    {webStats.browsers.map((b) => {
+                      const pct = webStats.totalViews > 0 ? Math.round((b.views / webStats.totalViews) * 100) : 0;
+                      return (
+                        <div key={b.browser} className="flex items-center justify-between text-sm">
+                          <span className="text-foreground">{b.browser}</span>
+                          <span className="text-muted-foreground">{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Call Volume Stats - pinned to current period */}
       <div className="grid gap-4 md:grid-cols-2">

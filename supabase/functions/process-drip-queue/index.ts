@@ -20,7 +20,7 @@ const MAX_STEPS = 7;
 const MAX_FAILURES = 3; // deactivate drip after 3 failures per step
 
 const DRIP_TEMPLATES: Record<number, string> = {
-  1: `Hey [Name]! Saw you took the After-Hours Audit — looks like you might be losing $[Leak]/yr and [Hours] hrs/yr to missed calls and admin work. I build systems to fix exactly that. Does that sound about right? - Adam, Saltarelli Web Studio`,
+  1: `Hey [Name]! Saw you took the Leaky Bucket Audit — looks like you might be losing $[Leak]/yr and [Hours] hrs/yr to missed calls and admin work. I build systems to fix exactly that. Does that sound about right? - Adam, Saltarelli Web Studio`,
   2: `Hey [Name], just circling back. I'm not reaching out to push anything — I genuinely think I can help based on your audit results. Just reply and I'll send over a quick case study of how I solved the exact same problem for another local business. - Adam`,
   3: `Me waiting for you to respond 😅 — but seriously [Name], just reply. 60 seconds, that's it. - Adam`,
   4: `Hey [Name]… it's me again. Had two businesses sign on this week so I'm filling up fast — but I kept a spot open with you in mind. Still interested? - Adam`,

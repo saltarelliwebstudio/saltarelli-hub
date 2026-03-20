@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
     }
 
     // Send notification to Adam
-    const adamMessage = `New Audit Lead!\n\nName: ${name}\nPhone: ${phone}\nScore: ${score}/10\nEst. Leak: $${leakFormatted}/yr\nHours Lost: ${hoursFormatted} hrs/yr\nLead: ${leadAction}\n\nThey just finished the After-Hours Audit on saltarelliwebstudio.ca. Drip step 1 is firing automatically.`;
+    const adamMessage = `New Audit Lead!\n\nName: ${name}\nPhone: ${phone}\nScore: ${score}/10\nEst. Leak: $${leakFormatted}/yr\nHours Lost: ${hoursFormatted} hrs/yr\nLead: ${leadAction}\n\nThey just finished the Leaky Bucket Audit on saltarelliwebstudio.ca. Drip step 1 is firing automatically.`;
 
     await fetch("https://api.openphone.com/v1/messages", {
       method: "POST",

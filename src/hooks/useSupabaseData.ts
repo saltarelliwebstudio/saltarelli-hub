@@ -2217,3 +2217,100 @@ export function useZenPlannerAttendance(
     enabled: !!clientId,
   });
 }
+
+// ── Website Analytics (page_views table) ──
+
+export interface PageViewStats {
+  totalViews: number;
+  uniqueVisitors: number;
+  topPages: { path: string; views: number }[];
+  topReferrers: { referrer: string; views: number }[];
+  devices: { device: string; views: number }[];
+  browsers: { browser: string; views: number }[];
+  dailyViews: { date: string; views: number; visitors: number }[];
+}
+
+export function usePageViewStats(days: number = 30) {
+  return useQuery({
+    queryKey: ['page-view-stats', days],
+    queryFn: async (): Promise<PageViewStats> => {
+      const since = new Date();
+      since.setDate(since.getDate() - days);
+
+      const { data, error } = await supabase
+        .from('page_views')
+        .select('path, referrer, device, browser, session_id, created_at')
+        .gte('created_at', since.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      const rows = data || [];
+
+      const totalViews = rows.length;
+
+      const uniqueSessions = new Set(rows.map((r: any) => r.session_id).filter(Boolean));
+      const uniqueVisitors = uniqueSessions.size || totalViews;
+
+      // Top pages
+      const pageCounts: Record<string, number> = {};
+      for (const r of rows) {
+        pageCounts[r.path] = (pageCounts[r.path] || 0) + 1;
+      }
+      const topPages = Object.entries(pageCounts)
+        .map(([path, views]) => ({ path, views }))
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 10);
+
+      // Top referrers
+      const refCounts: Record<string, number> = {};
+      for (const r of rows) {
+        if (r.referrer) {
+          try {
+            const host = new URL(r.referrer).hostname.replace(/^www\./, '');
+            refCounts[host] = (refCounts[host] || 0) + 1;
+          } catch {
+            refCounts[r.referrer] = (refCounts[r.referrer] || 0) + 1;
+          }
+        }
+      }
+      const topReferrers = Object.entries(refCounts)
+        .map(([referrer, views]) => ({ referrer, views }))
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 10);
+
+      // Devices
+      const deviceCounts: Record<string, number> = {};
+      for (const r of rows) {
+        const d = r.device || 'unknown';
+        deviceCounts[d] = (deviceCounts[d] || 0) + 1;
+      }
+      const devices = Object.entries(deviceCounts)
+        .map(([device, views]) => ({ device, views }))
+        .sort((a, b) => b.views - a.views);
+
+      // Browsers
+      const browserCounts: Record<string, number> = {};
+      for (const r of rows) {
+        const b = r.browser || 'unknown';
+        browserCounts[b] = (browserCounts[b] || 0) + 1;
+      }
+      const browsers = Object.entries(browserCounts)
+        .map(([browser, views]) => ({ browser, views }))
+        .sort((a, b) => b.views - a.views);
+
+      // Daily views
+      const dailyMap: Record<string, { views: number; sessions: Set<string> }> = {};
+      for (const r of rows) {
+        const date = r.created_at.split('T')[0];
+        if (!dailyMap[date]) dailyMap[date] = { views: 0, sessions: new Set() };
+        dailyMap[date].views++;
+        if (r.session_id) dailyMap[date].sessions.add(r.session_id);
+      }
+      const dailyViews = Object.entries(dailyMap)
+        .map(([date, d]) => ({ date, views: d.views, visitors: d.sessions.size || d.views }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      return { totalViews, uniqueVisitors, topPages, topReferrers, devices, browsers, dailyViews };
+    },
+  });
+}
