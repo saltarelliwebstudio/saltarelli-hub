@@ -1,9 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { verifyAdmin } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCorsOptions } from "../_shared/cors.ts";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -66,7 +63,15 @@ For anything beyond the dashboard, direct clients to Adam:
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsOptions(req);
+  }
+
+  const authCheck = await verifyAdmin(req);
+  if (authCheck.error) {
+    return new Response(JSON.stringify({ error: authCheck.error }), {
+      status: 401,
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -75,7 +80,7 @@ Deno.serve(async (req) => {
     if (!messages || !user_id || messages.length === 0) {
       return new Response(
         JSON.stringify({ response: "Sorry, I couldn't process that message. Please try again." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -84,7 +89,7 @@ Deno.serve(async (req) => {
       console.error("ANTHROPIC_API_KEY not set in secrets");
       return new Response(
         JSON.stringify({ response: "The support chat is being set up. Please contact Adam directly at saltarelliwebstudio@gmail.com or 289-931-4142." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -116,7 +121,7 @@ Deno.serve(async (req) => {
       console.error("Anthropic API error (status", anthropicResponse.status, "):", errorBody);
       return new Response(
         JSON.stringify({ response: "I'm having trouble right now. Please try again shortly, or contact Adam at saltarelliwebstudio@gmail.com or 289-931-4142." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -157,14 +162,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ response: assistantMessage }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Chat support error:", message);
     return new Response(
       JSON.stringify({ response: "I'm having a temporary issue. Please try again in a moment, or contact Adam at saltarelliwebstudio@gmail.com." }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

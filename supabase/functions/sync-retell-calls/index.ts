@@ -1,9 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { verifyCronOrAdmin } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCorsOptions } from "../_shared/cors.ts";
 
 interface RetellCall {
   call_id: string;
@@ -24,7 +21,15 @@ interface RetellCall {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsOptions(req);
+  }
+
+  const authCheck = await verifyCronOrAdmin(req);
+  if (authCheck.error) {
+    return new Response(JSON.stringify({ error: authCheck.error }), {
+      status: 401,
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -52,14 +57,14 @@ Deno.serve(async (req) => {
       console.error("Error fetching retell accounts:", accountsError);
       return new Response(
         JSON.stringify({ error: accountsError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
     if (!accounts || accounts.length === 0) {
       return new Response(
         JSON.stringify({ message: "No active Retell accounts found", synced: 0 }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -201,14 +206,14 @@ Deno.serve(async (req) => {
         success: true,
         ...results,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Sync error:", message);
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

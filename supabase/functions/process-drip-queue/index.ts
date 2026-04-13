@@ -1,9 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { verifyCronOrAdmin } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCorsOptions } from "../_shared/cors.ts";
 
 // 7-step audit drip sequence
 const STEP_DELAYS: Record<number, number> = {
@@ -18,6 +15,68 @@ const STEP_DELAYS: Record<number, number> = {
 
 const MAX_STEPS = 7;
 const MAX_FAILURES = 3; // deactivate drip after 3 failures per step
+const ADAM_PHONE = Deno.env.get("ADMIN_PHONE") || "+12899314142";
+
+/** Parse a human-readable reason from raw OpenPhone/send errors */
+function friendlyError(raw: string): string {
+  if (raw.includes("not approved for A2P")) return "A2P registration not approved (US numbers blocked)";
+  if (raw.includes("Opted Out")) return "Lead opted out of messages";
+  if (raw.includes("input was invalid")) return "Invalid phone number format";
+  if (raw.includes("number is not valid")) return "Phone number does not exist";
+  if (raw.includes("unreachable")) return "Phone unreachable";
+  if (raw.includes("credentials not configured")) return "OpenPhone not configured";
+  // Strip JSON wrapper if present
+  const msgMatch = raw.match(/"message"\s*:\s*"([^"]+)"/);
+  if (msgMatch) return msgMatch[1];
+  return raw.length > 80 ? raw.slice(0, 80) + "..." : raw;
+}
+
+/** Send Adam an SMS alert when a drip message fails */
+async function notifyFailure(
+  apiKey: string,
+  phoneNumberId: string,
+  lead: { name: string; business_name?: string; phone: string; email?: string; notes: string | null },
+  step: number,
+  errorMsg: string,
+  deactivated: boolean,
+) {
+  const { score, leak, hours } = parseAuditNotes(lead.notes);
+  const biz = lead.business_name ? ` (${lead.business_name})` : "";
+  const statusLine = deactivated
+    ? "DRIP STOPPED — won't retry"
+    : "Will retry next run";
+  const reason = friendlyError(errorMsg);
+
+  const hasAuditData = score !== "0" || leak !== "0";
+  const auditLine = hasAuditData
+    ? `Audit: ${score}/10 | $${leak}/yr leak | ${hours} hrs/yr lost`
+    : null;
+
+  const alert = [
+    `FAILED DRIP ALERT`,
+    ``,
+    `${lead.name}${biz}`,
+    `Phone: ${lead.phone}`,
+    lead.email ? `Email: ${lead.email}` : null,
+    ``,
+    `Step ${step} failed: ${reason}`,
+    statusLine,
+    auditLine ? `` : null,
+    auditLine,
+    ``,
+    `Follow up manually.`,
+  ].filter(Boolean).join("\n");
+
+  try {
+    await fetch("https://api.openphone.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: apiKey },
+      body: JSON.stringify({ content: alert, from: phoneNumberId, to: [ADAM_PHONE] }),
+    });
+  } catch (e) {
+    console.error("Failed to send failure alert to Adam:", e);
+  }
+}
 
 const DRIP_TEMPLATES: Record<number, string> = {
   1: `Hey [Name]! Saw you took the Leaky Bucket Audit — looks like you might be losing $[Leak]/yr and [Hours] hrs/yr to missed calls and admin work. I build systems to fix exactly that. Does that sound about right? - Adam, Saltarelli Web Studio`,
@@ -63,7 +122,15 @@ function buildMessage(template: string, lead: { name: string; notes: string | nu
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsOptions(req);
+  }
+
+  const authCheck = await verifyCronOrAdmin(req);
+  if (authCheck.error) {
+    return new Response(JSON.stringify({ error: authCheck.error }), {
+      status: 401,
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
   }
 
   const results = { processed: 0, sent: 0, skipped: 0, errors: 0, deactivated: 0 };
@@ -89,14 +156,14 @@ Deno.serve(async (req) => {
       console.error("Error fetching leads:", leadsError);
       return new Response(
         JSON.stringify({ error: leadsError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
     if (!leads || leads.length === 0) {
       return new Response(
         JSON.stringify({ ...results, message: "No eligible leads" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -113,7 +180,7 @@ Deno.serve(async (req) => {
     if (!apiKey || !phoneNumberId) {
       return new Response(
         JSON.stringify({ error: "OpenPhone credentials not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -194,7 +261,8 @@ Deno.serve(async (req) => {
 
         const lastSentAt = new Date(lastLog.sent_at);
         const daysSinceLast = Math.floor((now.getTime() - lastSentAt.getTime()) / (1000 * 60 * 60 * 24));
-        const requiredDelay = STEP_DELAYS[nextStep] || 0;
+        // Use the GAP between steps, not the absolute day number
+        const requiredDelay = (STEP_DELAYS[nextStep] || 0) - (STEP_DELAYS[lead.drip_step] || 0);
 
         if (daysSinceLast < requiredDelay) {
           results.skipped++;
@@ -253,6 +321,9 @@ Deno.serve(async (req) => {
         sendError = err instanceof Error ? err.message : "Unknown send error";
       }
 
+      // Detect permanent failures — no point retrying these ever
+      const PERMANENT_ERRORS = ["input was invalid", "Opted Out", "not approved for A2P", "number is not valid", "unreachable"];
+      const isPermanent = sendError && PERMANENT_ERRORS.some(e => sendError!.includes(e));
       const status = sendError ? "failed" : "sent";
 
       // Log
@@ -275,9 +346,18 @@ Deno.serve(async (req) => {
           .eq("id", lead.id);
 
         results.sent++;
+      } else if (isPermanent) {
+        // Permanent failure — deactivate immediately, don't retry tomorrow
+        await supabase
+          .from("admin_leads")
+          .update({ drip_active: false })
+          .eq("id", lead.id);
+        results.deactivated++;
+        await notifyFailure(apiKey, phoneNumberId, lead, nextStep, sendError!, true);
       } else {
         console.error(`Drip send failed for lead ${lead.id} step ${nextStep}:`, sendError);
         results.errors++;
+        await notifyFailure(apiKey, phoneNumberId, lead, nextStep, sendError!, false);
       }
     }
 
@@ -285,14 +365,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify(results),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("process-drip-queue error:", message);
     return new Response(
       JSON.stringify({ error: message, ...results }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

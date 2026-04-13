@@ -1,7 +1,5 @@
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { verifyAdmin } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCorsOptions } from "../_shared/cors.ts";
 
 interface Transaction {
   date: string;
@@ -9,12 +7,16 @@ interface Transaction {
   amount: number;
   category: string;
   type: "income" | "expense" | "transfer";
+  paymentMethod?: string;
+  taxDeductible?: boolean;
+  notes?: string;
 }
 
 interface WriteRequest {
   transactions: Transaction[];
   account: string;
   month: string; // e.g. "Mar 2026"
+  clearFirst?: boolean; // clear the tabs before writing
 }
 
 // Build a JWT from service account credentials using Web Crypto API
@@ -134,7 +136,7 @@ async function ensureSheetTab(
 
   // Add header row
   await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A1:F1?valueInputOption=RAW`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A1:I1?valueInputOption=RAW`,
     {
       method: "PUT",
       headers: {
@@ -142,7 +144,7 @@ async function ensureSheetTab(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        values: [["Date", "Description", "Amount", "Category", "Type", "Account"]],
+        values: [["Date", "Description", "Amount", "Category", "Type", "Account", "Payment Method", "Tax Deductible", "Notes"]],
       }),
     }
   );
@@ -155,7 +157,7 @@ async function appendRows(
   rows: string[][]
 ): Promise<void> {
   const res = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A:F:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tabName)}!A:I:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
       headers: {
@@ -173,11 +175,21 @@ async function appendRows(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsOptions(req);
+  }
+
+  const corsHeaders = getCorsHeaders(req);
+
+  const authCheck = await verifyAdmin(req);
+  if (authCheck.error) {
+    return new Response(JSON.stringify({ error: authCheck.error }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
-    const { transactions, account, month }: WriteRequest = await req.json();
+    const { transactions, account, month, clearFirst }: WriteRequest = await req.json();
 
     if (!transactions?.length || !account || !month) {
       return new Response(
@@ -199,19 +211,38 @@ Deno.serve(async (req) => {
     const serviceAccount = JSON.parse(serviceAccountJson);
     const accessToken = await getAccessToken(serviceAccount);
 
-    // Build rows
-    const rows = transactions.map((t) => [
+    // Sort by date ascending (oldest first) then build rows
+    const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
+    const rows = sorted.map((t) => [
       t.date,
       t.description,
-      t.type === "expense" ? `-${t.amount}` : String(t.amount),
+      String(Math.abs(t.amount)),
       t.category,
       t.type,
       account,
+      t.paymentMethod || "",
+      t.taxDeductible ? "Yes" : "No",
+      t.notes || "",
     ]);
 
     // Ensure month tab exists and Master Log tab exists
     await ensureSheetTab(accessToken, sheetId, month);
     await ensureSheetTab(accessToken, sheetId, "Master Log");
+
+    // Clear tabs if requested (keeps header row)
+    if (clearFirst) {
+      for (const tab of [month, "Master Log"]) {
+        const clearRes = await fetch(
+          `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(tab)}!A2:Z1000:clear`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: "{}",
+          }
+        );
+        console.log(`Clear ${tab}: ${clearRes.status}`);
+      }
+    }
 
     // Append to both tabs
     await appendRows(accessToken, sheetId, month, rows);

@@ -1,9 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { getCorsHeaders, handleCorsOptions } from "../_shared/cors.ts";
+// NOTE: track-pageview accepts anonymous traffic (no auth).
+// The CORS allowlist in _shared/cors.ts covers saltarelli-hub.vercel.app and
+// saltarelliwebstudio.ca. If other sites (e.g. client sites, aborigenhats.com,
+// cassar-electrical, adam-planner) send pageview beacons here, their origins
+// must be added to ALLOWED_ORIGINS in _shared/cors.ts.
 
 function parseDevice(ua: string): { device: string; browser: string } {
   const lower = ua.toLowerCase();
@@ -24,8 +25,10 @@ function parseDevice(ua: string): { device: string; browser: string } {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsOptions(req);
   }
+
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     const body = await req.json();
@@ -54,13 +57,21 @@ Deno.serve(async (req) => {
         );
       }
 
-      await supabase.from("site_events").insert({
+      const { error: evtErr } = await supabase.from("site_events").insert({
         event,
         path: path || null,
         metadata: metadata || null,
         session_id: sessionId || null,
         device,
       });
+
+      if (evtErr) {
+        console.error("site_events insert error:", evtErr);
+        return new Response(
+          JSON.stringify({ error: evtErr.message, detail: evtErr }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     } else {
       // Page view tracking (default)
       const { path, referrer, sessionId } = body;
@@ -71,7 +82,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      await supabase.from("page_views").insert({
+      const { error: insertErr } = await supabase.from("page_views").insert({
         path,
         referrer: referrer || null,
         user_agent: ua,
@@ -80,6 +91,14 @@ Deno.serve(async (req) => {
         country,
         session_id: sessionId || null,
       });
+
+      if (insertErr) {
+        console.error("page_views insert error:", insertErr);
+        return new Response(
+          JSON.stringify({ error: insertErr.message, detail: insertErr }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     return new Response(

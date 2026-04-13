@@ -1,11 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { verifyCronOrAdmin } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCorsOptions } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-const ADAM_PHONE = "+12899314142";
+const ADAM_PHONE = Deno.env.get("ADMIN_PHONE") || "+12899314142";
 
 function normalisePhone(raw: string): string | null {
   if (!raw) return null;
@@ -17,7 +14,15 @@ function normalisePhone(raw: string): string | null {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsOptions(req);
+  }
+
+  const authCheck = await verifyCronOrAdmin(req);
+  if (authCheck.error) {
+    return new Response(JSON.stringify({ error: authCheck.error }), {
+      status: 401,
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -26,7 +31,7 @@ Deno.serve(async (req) => {
     if (!name || !phone) {
       return new Response(
         JSON.stringify({ error: "name and phone are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -49,7 +54,7 @@ Deno.serve(async (req) => {
     if (!apiKey || !phoneNumberId) {
       return new Response(
         JSON.stringify({ error: "OpenPhone credentials not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -89,10 +94,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Send notification to Adam
+    // Send notification to Adam via SMS + Telegram
     const adamMessage = `New Audit Lead!\n\nName: ${name}\nPhone: ${phone}\nScore: ${score}/10\nEst. Leak: $${leakFormatted}/yr\nHours Lost: ${hoursFormatted} hrs/yr\nLead: ${leadAction}\n\nThey just finished the Leaky Bucket Audit on saltarelliwebstudio.ca. Drip step 1 is firing automatically.`;
 
-    await fetch("https://api.openphone.com/v1/messages", {
+    // OpenPhone SMS
+    const smsPromise = fetch("https://api.openphone.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -103,18 +109,35 @@ Deno.serve(async (req) => {
         from: phoneNumberId,
         to: [ADAM_PHONE],
       }),
-    });
+    }).catch((e) => console.error("OpenPhone SMS failed:", e));
+
+    // Telegram backup
+    const tgToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
+    const tgChat = Deno.env.get("TELEGRAM_CHAT_ID");
+    const tgPromise = tgToken && tgChat
+      ? fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: tgChat,
+            text: `🔔 *New Audit Lead*\n\n*Name:* ${name}\n*Phone:* ${phone}\n*Email:* ${email || "—"}\n*Score:* ${score}/10\n*Est. Leak:* $${leakFormatted}/yr\n*Hours Lost:* ${hoursFormatted} hrs/yr\n*Lead:* ${leadAction}`,
+            parse_mode: "Markdown",
+          }),
+        }).catch((e) => console.error("Telegram notify failed:", e))
+      : Promise.resolve();
+
+    await Promise.allSettled([smsPromise, tgPromise]);
 
     return new Response(
       JSON.stringify({ success: true, leadAction }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("notify-audit-lead error:", message);
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

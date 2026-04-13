@@ -1,9 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { verifyCronOrAdmin } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCorsOptions } from "../_shared/cors.ts";
 
 // 7-step audit drip: inbound leads who completed the Leaky Bucket Audit
 const DRIP_SEQUENCE = [
@@ -44,6 +41,63 @@ const DRIP_SEQUENCE = [
   },
 ];
 
+const ADAM_PHONE = Deno.env.get("ADMIN_PHONE") || "+12899314142";
+
+/** Parse a human-readable reason from raw OpenPhone/send errors */
+function friendlyError(raw: string): string {
+  if (raw.includes("not approved for A2P")) return "A2P registration not approved (US numbers blocked)";
+  if (raw.includes("Opted Out")) return "Lead opted out of messages";
+  if (raw.includes("input was invalid")) return "Invalid phone number format";
+  if (raw.includes("number is not valid")) return "Phone number does not exist";
+  if (raw.includes("unreachable")) return "Phone unreachable";
+  if (raw.includes("credentials not configured")) return "OpenPhone not configured";
+  const msgMatch = raw.match(/"message"\s*:\s*"([^"]+)"/);
+  if (msgMatch) return msgMatch[1];
+  return raw.length > 80 ? raw.slice(0, 80) + "..." : raw;
+}
+
+/** Send Adam an SMS alert when a drip message fails */
+async function notifyFailure(
+  apiKey: string,
+  phoneNumberId: string,
+  lead: { name: string; business_name?: string; phone: string; email?: string; notes: string | null },
+  step: number,
+  errorMsg: string,
+) {
+  const { score, leak, hours } = parseAuditNotes(lead.notes);
+  const biz = lead.business_name ? ` (${lead.business_name})` : "";
+  const reason = friendlyError(errorMsg);
+
+  const hasAuditData = score !== "0" || leak !== "0";
+  const auditLine = hasAuditData
+    ? `Audit: ${score}/10 | $${leak}/yr leak | ${hours} hrs/yr lost`
+    : null;
+
+  const alert = [
+    `FAILED DRIP ALERT`,
+    ``,
+    `${lead.name}${biz}`,
+    `Phone: ${lead.phone}`,
+    lead.email ? `Email: ${lead.email}` : null,
+    ``,
+    `Step ${step} failed: ${reason}`,
+    auditLine ? `` : null,
+    auditLine,
+    ``,
+    `Follow up manually.`,
+  ].filter(Boolean).join("\n");
+
+  try {
+    await fetch("https://api.openphone.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: apiKey },
+      body: JSON.stringify({ content: alert, from: phoneNumberId, to: [ADAM_PHONE] }),
+    });
+  } catch (e) {
+    console.error("Failed to send failure alert to Adam:", e);
+  }
+}
+
 /** Normalise a phone number to E.164 format (+1XXXXXXXXXX for North American numbers) */
 function normalisePhone(raw: string): string | null {
   if (!raw) return null;
@@ -78,7 +132,15 @@ function buildMessage(template: string, lead: { name: string; notes: string | nu
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsOptions(req);
+  }
+
+  const authCheck = await verifyCronOrAdmin(req);
+  if (authCheck.error) {
+    return new Response(JSON.stringify({ error: authCheck.error }), {
+      status: 401,
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -87,7 +149,7 @@ Deno.serve(async (req) => {
     if (!lead_id || !step) {
       return new Response(
         JSON.stringify({ error: "lead_id and step are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -107,7 +169,7 @@ Deno.serve(async (req) => {
     if (leadError || !lead) {
       return new Response(
         JSON.stringify({ error: "Lead not found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 404, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -115,25 +177,25 @@ Deno.serve(async (req) => {
     if (!lead.drip_active) {
       return new Response(
         JSON.stringify({ skipped: true, reason: "drip_active is false" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
     if (lead.drip_paused_at) {
       return new Response(
         JSON.stringify({ skipped: true, reason: "drip is paused" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
     if (!lead.phone) {
       return new Response(
         JSON.stringify({ skipped: true, reason: "no phone number" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
     if (lead.status === "closed" || lead.status === "client" || lead.status === "do_not_contact") {
       return new Response(
         JSON.stringify({ skipped: true, reason: `lead status is ${lead.status}` }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -148,7 +210,7 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ skipped: true, reason: `invalid phone number: ${lead.phone}` }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -166,7 +228,7 @@ Deno.serve(async (req) => {
     if (existingLog) {
       return new Response(
         JSON.stringify({ skipped: true, reason: `step ${step} already sent or recently attempted` }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -175,7 +237,7 @@ Deno.serve(async (req) => {
     if (!stepConfig) {
       return new Response(
         JSON.stringify({ error: `Invalid step: ${step}. Only steps 1-7 are supported.` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -202,7 +264,7 @@ Deno.serve(async (req) => {
 
       return new Response(
         JSON.stringify({ error: "OpenPhone credentials not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -256,18 +318,21 @@ Deno.serve(async (req) => {
           last_contacted_date: new Date().toISOString().split("T")[0],
         })
         .eq("id", lead_id);
+    } else {
+      // Alert Adam immediately so he can follow up manually
+      await notifyFailure(apiKey!, phoneNumberId!, lead, step, sendError);
     }
 
     return new Response(
       JSON.stringify({ success: !sendError, lead_id, step, status, error: sendError }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("send-drip-sms error:", message);
     return new Response(
       JSON.stringify({ error: message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

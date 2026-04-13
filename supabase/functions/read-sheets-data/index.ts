@@ -1,7 +1,5 @@
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { verifyAdmin } from "../_shared/auth.ts";
+import { getCorsHeaders, handleCorsOptions } from "../_shared/cors.ts";
 
 interface ReadRequest {
   months?: number;
@@ -77,7 +75,17 @@ async function getAccessToken(serviceAccount: {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return handleCorsOptions(req);
+  }
+
+  const corsHeaders = getCorsHeaders(req);
+
+  const authCheck = await verifyAdmin(req);
+  if (authCheck.error) {
+    return new Response(JSON.stringify({ error: authCheck.error }), {
+      status: 401,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
@@ -99,7 +107,7 @@ Deno.serve(async (req) => {
 
     // Read from Master Log
     const res = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent("Master Log")}!A:F`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent("Master Log")}!A:I`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
 
@@ -178,6 +186,9 @@ Deno.serve(async (req) => {
           category: row[3] || "",
           type: row[4] || "",
           account: row[5] || "",
+          paymentMethod: row[6] || "",
+          taxDeductible: row[7] === "Yes",
+          notes: row[8] || "",
         })),
         monthlyTotals,
         categoryTotals,
