@@ -23,6 +23,9 @@ import IntegrationSettings from "@/pages/admin/IntegrationSettings";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminLeads from "@/pages/admin/AdminLeads";
 import AdminFinance from "@/pages/admin/AdminFinance";
+import AdminSocialMedia from "@/pages/admin/AdminSocialMedia";
+import AdminOnboarding from "@/pages/admin/AdminOnboarding";
+import AdminWorkshopSignups from "@/pages/admin/AdminWorkshopSignups";
 
 // Client Pages
 import ClientDashboard from "@/pages/dashboard/ClientDashboard";
@@ -66,9 +69,12 @@ const App = () => (
               <Route path="/admin/clients" element={<ClientsList />} />
               <Route path="/admin/clients/:podId" element={<ClientDetail />} />
               <Route path="/admin/leads" element={<AdminLeads />} />
+              <Route path="/admin/workshop-signups" element={<AdminWorkshopSignups />} />
               <Route path="/admin/analytics" element={<AdminAnalytics />} />
               <Route path="/admin/integrations" element={<IntegrationSettings />} />
               <Route path="/admin/finance" element={<AdminFinance />} />
+              <Route path="/admin/social-media" element={<AdminSocialMedia />} />
+              <Route path="/admin/onboarding" element={<AdminOnboarding />} />
               <Route path="/admin/settings" element={<AdminSettings />} />
             </Route>
 

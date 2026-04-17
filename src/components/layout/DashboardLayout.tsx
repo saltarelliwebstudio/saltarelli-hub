@@ -37,6 +37,9 @@ import {
   CalendarCheck,
   ContactRound,
   Wallet,
+  Share2,
+  ClipboardList,
+  GraduationCap,
 } from 'lucide-react';
 import { NotificationBell } from '@/components/layout/NotificationBell';
 import logo from '@/assets/logo.png';
@@ -53,8 +56,11 @@ const adminNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Clients', href: '/admin/clients', icon: Users },
   { label: 'Leads', href: '/admin/leads', icon: ContactRound },
+  { label: 'Workshop Signups', href: '/admin/workshop-signups', icon: GraduationCap },
   { label: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
   { label: 'Finance', href: '/admin/finance', icon: Wallet },
+  { label: 'Social Media', href: '/admin/social-media', icon: Share2 },
+  { label: 'Onboarding', href: '/admin/onboarding', icon: ClipboardList },
   { label: 'Integrations', href: '/admin/integrations', icon: Plug },
   { label: 'Settings', href: '/admin/settings', icon: Settings },
 ];
