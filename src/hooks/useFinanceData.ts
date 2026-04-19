@@ -89,7 +89,10 @@ export function useCategorizeTransactions() {
         const { data, error } = await supabase.functions.invoke('categorize-transactions', {
           body: { rawText: chunk, account },
         });
-        if (error) throw new Error(error.message);
+        if (error) {
+          const body = await error.context?.text?.().catch(() => '');
+          throw new Error(body || error.message);
+        }
         if (data?.error) throw new Error(data.error);
         allTransactions.push(...data.transactions);
       }
