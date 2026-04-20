@@ -84,17 +84,39 @@ export function useCategorizeTransactions() {
     mutationFn: async ({ rawText, account }: { rawText: string; account: string }) => {
       const chunks = splitTransactionText(rawText);
 
+      const results = await Promise.allSettled(
+        chunks.map((chunk) =>
+          supabase.functions.invoke('categorize-transactions', {
+            body: { rawText: chunk, account },
+          })
+        )
+      );
+
       const allTransactions: CategorizedTransaction[] = [];
-      for (const chunk of chunks) {
-        const { data, error } = await supabase.functions.invoke('categorize-transactions', {
-          body: { rawText: chunk, account },
-        });
+      const failures: string[] = [];
+      for (let i = 0; i < results.length; i++) {
+        const r = results[i];
+        if (r.status === 'rejected') {
+          failures.push(`Chunk ${i + 1}: ${r.reason?.message ?? 'unknown error'}`);
+          continue;
+        }
+        const { data, error } = r.value;
         if (error) {
           const body = await error.context?.text?.().catch(() => '');
-          throw new Error(body || error.message);
+          failures.push(`Chunk ${i + 1}: ${body || error.message}`);
+          continue;
         }
-        if (data?.error) throw new Error(data.error);
+        if (data?.error) {
+          failures.push(`Chunk ${i + 1}: ${data.error}`);
+          continue;
+        }
         allTransactions.push(...data.transactions);
+      }
+      if (allTransactions.length === 0 && failures.length > 0) {
+        throw new Error(failures.join(' | '));
+      }
+      if (failures.length > 0) {
+        console.warn('Some chunks failed during categorization:', failures);
       }
 
       // Build combined summary
