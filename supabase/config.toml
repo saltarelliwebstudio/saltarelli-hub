@@ -1,1 +1,10 @@
 project_id = "lipahzaksypfqojqtwjr"
+
+[functions.categorize-transactions]
+verify_jwt = false
+
+[functions.write-to-sheets]
+verify_jwt = false
+
+[functions.read-sheets-data]
+verify_jwt = false
